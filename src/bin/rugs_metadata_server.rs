@@ -104,6 +104,7 @@ async fn main() {
 
     let app = Router::new()
         .nest("/api", Router::new().merge(user_routes).merge(admin_routes))
+        .route("/health", get(health))
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
@@ -117,6 +118,9 @@ async fn main() {
         .await
         .unwrap();
 }
+
+// Just returns a 200.
+async fn health() {}
 
 #[derive(Debug, Deserialize)]
 struct LatestParams {
