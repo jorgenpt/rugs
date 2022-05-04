@@ -2,6 +2,7 @@ use std::num::NonZeroI64;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 /// This maps to `LatestData` in MetadataServer & UGS
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -12,13 +13,14 @@ pub struct LatestResponseV1 {
     pub last_build_id: i64,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Debug, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
 pub enum BuildDataResult {
-    Starting = 1,
-    Failure = 2,
-    Warning = 3,
-    Success = 4,
-    Skipped = 5,
+    Starting = 0,
+    Failure = 1,
+    Warning = 2,
+    Success = 3,
+    Skipped = 4,
 }
 
 /// This maps to `BuildData` in MetadataServer, `BadgeData` in UGS
@@ -26,33 +28,23 @@ pub enum BuildDataResult {
 #[serde(rename_all = "PascalCase")]
 pub struct Badge {
     pub id: Option<NonZeroI64>,
-    pub change_number: u32,
+    pub change_number: i64,
     pub added_at: DateTime<Utc>,
     pub build_type: String,
     pub result: BuildDataResult,
-    pub url: Option<String>,
+    pub url: String,
     pub project: String,
     pub archive_path: Option<String>,
 }
 
-impl Badge {
-    pub fn new(
-        change_number: u32,
-        build_type: &str,
-        result: BuildDataResult,
-        url: Option<&str>,
-        project: &str,
-        archive_path: Option<&str>,
-    ) -> Self {
-        Self {
-            id: None,
-            change_number,
-            added_at: Utc::now(),
-            build_type: build_type.into(),
-            result,
-            url: url.map(&str::to_owned),
-            project: project.to_owned(),
-            archive_path: archive_path.map(&str::to_owned),
-        }
-    }
+/// This maps to `BuildData` in MetadataServer, `BadgeData` in UGS
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct CreateBadge {
+    pub change_number: i64,
+    pub build_type: String,
+    pub result: BuildDataResult,
+    pub url: String,
+    pub project: String,
+    pub archive_path: Option<String>,
 }
