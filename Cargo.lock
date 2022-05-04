@@ -1365,6 +1365,7 @@ dependencies = [
  "tower",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -1467,6 +1468,8 @@ dependencies = [
  "serde_repr",
  "sqlx",
  "tokio",
+ "tower",
+ "tower-http",
  "tracing",
  "tracing-subscriber",
 ]

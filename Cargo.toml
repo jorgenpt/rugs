@@ -15,5 +15,7 @@ serde_json = "1.0"
 serde_repr = "0.1.8"
 sqlx = { version = "0.5", features = ["chrono", "migrate", "runtime-tokio-native-tls", "sqlite"] }
 tokio = { version = "1.0", features = ["full"] }
+tower = { version = "0.4.12" }
+tower-http = { version = "0.3.2", features = ["trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

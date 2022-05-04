@@ -1,14 +1,15 @@
 use axum::{
-    body::{Body, Bytes},
     extract::Query,
-    http::{self, Request, Response, StatusCode},
+    http::{self, Request, StatusCode, Uri},
     middleware::{self, Next},
-    response::IntoResponse,
+    response::{ErrorResponse, IntoResponse},
     routing::{get, post},
     Extension, Json, Router,
 };
 use serde::Deserialize;
 use sqlx::SqlitePool;
+use tower::ServiceBuilder;
+use tower_http::trace::TraceLayer;
 use tracing::info;
 
 use std::{error::Error, fs::File, io::BufReader, net::SocketAddr, num::NonZeroI64, path::Path};
@@ -46,8 +47,6 @@ async fn auth<B>(req: Request<B>, next: Next<B>, required_auth: String) -> impl 
 #[tokio::main]
 async fn main() {
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
-        // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
-        // will be written to stdout.
         .with_max_level(tracing::Level::DEBUG)
         .finish();
 
@@ -82,11 +81,12 @@ async fn main() {
 
     let app = Router::new()
         .nest("/api", Router::new().merge(user_routes).merge(admin_routes))
-        .layer(middleware::from_fn(print_request_response))
-        .layer(Extension(pool));
+        .layer(
+            ServiceBuilder::new()
+                .layer(TraceLayer::new_for_http())
+                .layer(Extension(pool)),
+        );
 
-    // run our app with hyper
-    // `axum::Server` is a re-export of `hyper::Server`
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     tracing::debug!("listening on {}", addr);
     axum::Server::bind(&addr)
@@ -215,43 +215,4 @@ async fn add_badge(
     query.execute(&pool).await.unwrap();
 
     (StatusCode::OK, "")
-}
-
-async fn print_request_response(
-    req: Request<Body>,
-    next: Next<Body>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
-    let (parts, body) = req.into_parts();
-    let bytes = buffer_and_print("request", body).await?;
-    let req = Request::from_parts(parts, Body::from(bytes));
-
-    let res = next.run(req).await;
-
-    let (parts, body) = res.into_parts();
-    let bytes = buffer_and_print("response", body).await?;
-    let res = Response::from_parts(parts, Body::from(bytes));
-
-    Ok(res)
-}
-
-async fn buffer_and_print<B>(direction: &str, body: B) -> Result<Bytes, (StatusCode, String)>
-where
-    B: axum::body::HttpBody<Data = Bytes>,
-    B::Error: std::fmt::Display,
-{
-    let bytes = match hyper::body::to_bytes(body).await {
-        Ok(bytes) => bytes,
-        Err(err) => {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                format!("failed to read {} body: {}", direction, err),
-            ));
-        }
-    };
-
-    if let Ok(body) = std::str::from_utf8(&bytes) {
-        tracing::debug!("{} body = {:?}", direction, body);
-    }
-
-    Ok(bytes)
 }
