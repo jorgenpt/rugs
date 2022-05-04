@@ -48,3 +48,9 @@ pub struct CreateBadge {
     pub project: String,
     pub archive_path: Option<String>,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Config {
+    pub user_auth: String,
+    pub ci_auth: String,
+}

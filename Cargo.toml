@@ -7,11 +7,11 @@ edition = "2021"
 
 [dependencies]
 axum = "0.5.4"
+base64 = "0.13.0"
 chrono = { version = "0.4.19", features = ["serde"] }
 hyper = "0.14.18"
-rusqlite = "0.27.0"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.68"
+serde_json = "1.0"
 serde_repr = "0.1.8"
 sqlx = { version = "0.5", features = ["chrono", "migrate", "runtime-tokio-native-tls", "sqlite"] }
 tokio = { version = "1.0", features = ["full"] }

@@ -1,22 +1,47 @@
 use axum::{
     body::{Body, Bytes},
     extract::Query,
-    http::{Request, Response, StatusCode},
+    http::{self, Request, Response, StatusCode},
     middleware::{self, Next},
     response::IntoResponse,
-    routing::get,
+    routing::{get, post},
     Extension, Json, Router,
 };
 use serde::Deserialize;
 use sqlx::SqlitePool;
 use tracing::info;
 
-use std::{net::SocketAddr, num::NonZeroI64, sync::Arc};
+use std::{error::Error, fs::File, io::BufReader, net::SocketAddr, num::NonZeroI64, path::Path};
 
 mod models;
 use models::*;
 
-struct Config {}
+fn read_config_from_file<P: AsRef<Path>>(path: P) -> Result<Config, Box<dyn Error>> {
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+
+    let config = serde_json::from_reader(reader)?;
+    Ok(config)
+}
+
+async fn auth<B>(req: Request<B>, next: Next<B>, required_auth: String) -> impl IntoResponse {
+    if required_auth.is_empty() {
+        Ok(next.run(req).await)
+    } else {
+        let auth_header = req.headers().get(http::header::AUTHORIZATION);
+
+        let auth_header = auth_header
+            .and_then(|header| header.to_str().ok())
+            .and_then(|header| header.strip_prefix("Basic "))
+            .and_then(|authorization_b64| base64::decode(authorization_b64).ok())
+            .and_then(|bytes| String::from_utf8(bytes).ok());
+
+        match auth_header {
+            Some(auth_header) if auth_header == required_auth => Ok(next.run(req).await),
+            _ => Err(StatusCode::UNAUTHORIZED),
+        }
+    }
+}
 
 #[tokio::main]
 async fn main() {
@@ -28,7 +53,8 @@ async fn main() {
 
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
-    let config = Arc::new(Config {});
+    let config = read_config_from_file("config.json").unwrap();
+
     let pool = SqlitePool::connect("sqlite:metadata.db").await.unwrap();
     sqlx::migrate::Migrator::new(std::path::Path::new("./migrations"))
         .await
@@ -37,16 +63,26 @@ async fn main() {
         .await
         .unwrap();
 
-    // build our application with a route
+    let user_routes = Router::new()
+        .route("/latest", get(latest))
+        .route("/build", get(badges))
+        .route("/event", get(events))
+        .route("/comment", get(comments))
+        .route("/issues", get(issues))
+        .layer(middleware::from_fn(move |req, next| {
+            auth(req, next, config.user_auth.clone())
+        }));
+
+    let admin_routes = Router::new()
+        .route("/build", post(add_badge))
+        .route("/Build", post(add_badge)) // Back compat with old PostBadgeStatus.exe
+        .layer(middleware::from_fn(move |req, next| {
+            auth(req, next, config.ci_auth.clone())
+        }));
+
     let app = Router::new()
-        .route("/api/latest", get(latest))
-        .route("/api/build", get(badges).post(add_badge))
-        .route("/api/Build", get(badges).post(add_badge))
-        .route("/api/event", get(events))
-        .route("/api/comment", get(comments))
-        .route("/api/issues", get(issues))
+        .nest("/api", Router::new().merge(user_routes).merge(admin_routes))
         .layer(middleware::from_fn(print_request_response))
-        .layer(Extension(config))
         .layer(Extension(pool));
 
     // run our app with hyper
