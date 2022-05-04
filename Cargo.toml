@@ -1,5 +1,5 @@
 [package]
-name = "ugs_metadata_server"
+name = "rugs"
 version = "0.1.0"
 edition = "2021"
 
@@ -19,3 +19,6 @@ tower = { version = "0.4.12" }
 tower-http = { version = "0.3.2", features = ["trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[[bin]]
+name = "rugs_metadata_server"

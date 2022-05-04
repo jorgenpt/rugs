@@ -14,8 +14,7 @@ use tracing::info;
 
 use std::{error::Error, fs::File, io::BufReader, net::SocketAddr, num::NonZeroI64, path::Path};
 
-mod models;
-use models::*;
+use rugs::models::*;
 
 fn read_config_from_file<P: AsRef<Path>>(path: P) -> Result<Config, Box<dyn Error>> {
     let file = File::open(path)?;
