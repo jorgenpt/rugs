@@ -69,11 +69,7 @@ async fn lowercase_uri<B>(mut req: Request<B>, next: Next<B>) -> impl IntoRespon
 
 #[tokio::main]
 async fn main() {
-    let subscriber = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(tracing::Level::DEBUG)
-        .finish();
-
-    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+    tracing_subscriber::fmt::init();
 
     let config = read_config_from_file("config.json").unwrap();
 
@@ -111,7 +107,7 @@ async fn main() {
                 .layer(Extension(pool)),
         );
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     tracing::debug!("listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
