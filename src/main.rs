@@ -44,6 +44,30 @@ async fn auth<B>(req: Request<B>, next: Next<B>, required_auth: String) -> impl 
     }
 }
 
+// Currently unused as these types of layers run too late to affect routing
+#[allow(dead_code)]
+async fn lowercase_uri<B>(mut req: Request<B>, next: Next<B>) -> impl IntoResponse {
+    let mut new_uri = Uri::builder();
+    if let Some(scheme) = req.uri().scheme() {
+        new_uri = new_uri.scheme(scheme.to_owned());
+    }
+    if let Some(authority) = req.uri().authority() {
+        new_uri = new_uri.authority(authority.to_owned());
+    }
+    if let Some(p_and_q) = req.uri().path_and_query() {
+        let new_path_and_query = if let Some(query) = p_and_q.query() {
+            p_and_q.path().to_lowercase() + "?" + query
+        } else {
+            p_and_q.path().to_lowercase()
+        };
+
+        new_uri = new_uri.path_and_query(new_path_and_query);
+    }
+    *req.uri_mut() = new_uri.build().unwrap();
+    tracing::debug!("new uri: {:?}", req.uri());
+    Ok::<_, ErrorResponse>(next.run(req).await)
+}
+
 #[tokio::main]
 async fn main() {
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
