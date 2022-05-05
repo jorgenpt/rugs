@@ -98,14 +98,24 @@ async fn main() {
             auth(req, next, config.ci_auth.clone())
         }));
 
-    let app = Router::new()
-        .nest("/api", Router::new().merge(user_routes).merge(admin_routes))
-        .route("/health", get(health))
-        .layer(
-            ServiceBuilder::new()
-                .layer(TraceLayer::new_for_http())
-                .layer(Extension(pool)),
-        );
+    let app = Router::new().nest(
+        &config.request_root,
+        Router::new()
+            .nest("/api", Router::new().merge(user_routes).merge(admin_routes))
+            .route("/health", get(health)),
+    );
+
+    let app = if config.request_root != "/" {
+        app.route("/health", get(health))
+    } else {
+        app
+    };
+
+    let app = app.layer(
+        ServiceBuilder::new()
+            .layer(TraceLayer::new_for_http())
+            .layer(Extension(pool)),
+    );
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     tracing::debug!("listening on {}", addr);
