@@ -75,12 +75,6 @@ async fn main() {
     let config = read_config_from_file("config.json").unwrap();
 
     let pool = SqlitePool::connect("sqlite:metadata.db").await.unwrap();
-    sqlx::migrate::Migrator::new(std::path::Path::new("./migrations"))
-        .await
-        .unwrap()
-        .run(&pool)
-        .await
-        .unwrap();
 
     let user_routes = Router::new()
         .route("/latest", get(latest))

@@ -1,0 +1,125 @@
+{
+  "db": "SQLite",
+  "1180e3f5ea2ab4dba0a48266c899690d41e2a829c381123e1c5964cb95df6962": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "change_number",
+          "ordinal": 1,
+          "type_info": "Int64"
+        },
+        {
+          "name": "added_at",
+          "ordinal": 2,
+          "type_info": "Datetime"
+        },
+        {
+          "name": "build_type",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "result",
+          "ordinal": 4,
+          "type_info": "Int64"
+        },
+        {
+          "name": "url",
+          "ordinal": 5,
+          "type_info": "Text"
+        },
+        {
+          "name": "project_id",
+          "ordinal": 6,
+          "type_info": "Int64"
+        },
+        {
+          "name": "archive_path",
+          "ordinal": 7,
+          "type_info": "Text"
+        },
+        {
+          "name": "project",
+          "ordinal": 8,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false
+      ],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "SELECT * FROM badges INNER JOIN projects USING(project_id) WHERE id > ? AND project = ? ORDER BY id ASC"
+  },
+  "1a01797bc68e6550c12b8481d3e1be41a86de72f805631c2d93c00af65f5e3cb": {
+    "describe": {
+      "columns": [
+        {
+          "name": "project_id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT project_id FROM projects WHERE project = ? LIMIT 1"
+  },
+  "6eec0681c6e726ec09d95d424bbada44b1d44e666a1bd2c40aa2bfc09ebf02b9": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 7
+      }
+    },
+    "query": "INSERT INTO badges (change_number, added_at, build_type, result, url, project_id, archive_path) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  },
+  "bb14e9f4fea35bfe8beaf49885341136c1db55551bcf2b02399777d40c97b867": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "INSERT INTO projects (project) VALUES (?)"
+  },
+  "f3897880e586cff3c221d3658677706ea8263c918ea297676e4142a9bae52048": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT id FROM badges INNER JOIN projects USING(project_id) WHERE project = ? ORDER BY id DESC LIMIT 1"
+  }
+}
