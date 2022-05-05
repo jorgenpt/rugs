@@ -44,19 +44,30 @@ fn read_config_from_file<P: AsRef<Path>>(path: P) -> Result<Config, Box<dyn Erro
 async fn auth<B>(req: Request<B>, next: Next<B>, required_auth: String) -> impl IntoResponse {
     if required_auth.is_empty() {
         Ok(next.run(req).await)
-    } else {
-        let auth_header = req.headers().get(http::header::AUTHORIZATION);
-
-        let auth_header = auth_header
-            .and_then(|header| header.to_str().ok())
+    } else if let Some(auth_header) = req.headers().get(http::header::AUTHORIZATION) {
+        let authorization = auth_header
+            .to_str()
+            .ok()
             .and_then(|header| header.strip_prefix("Basic "))
             .and_then(|authorization_b64| base64::decode(authorization_b64).ok())
             .and_then(|bytes| String::from_utf8(bytes).ok());
 
-        match auth_header {
-            Some(auth_header) if auth_header == required_auth => Ok(next.run(req).await),
-            _ => Err(StatusCode::UNAUTHORIZED),
+        match authorization {
+            Some(authorization) => {
+                if authorization == required_auth {
+                    Ok(next.run(req).await)
+                } else {
+                    error!("Invalid token in Authorization header, denying");
+                    Err(StatusCode::UNAUTHORIZED)
+                }
+            }
+            None => {
+                error!("Bogus Authorization header {:?}, denying", auth_header);
+                Err(StatusCode::UNAUTHORIZED)
+            }
         }
+    } else {
+        Err(StatusCode::UNAUTHORIZED)
     }
 }
 
