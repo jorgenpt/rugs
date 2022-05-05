@@ -6,6 +6,7 @@ use axum::{
     routing::{get, post},
     Extension, Json, Router,
 };
+use num_traits::FromPrimitive;
 use serde::Deserialize;
 use sqlx::SqlitePool;
 use tower::ServiceBuilder;
@@ -177,7 +178,7 @@ async fn badges(
         change_number: row.change_number,
         added_at: chrono::DateTime::<chrono::Utc>::from_utc(row.added_at, chrono::Utc),
         build_type: row.build_type,
-        result: BuildDataResult::Success,
+        result: BuildDataResult::from_i64(row.result).unwrap(),
         url: row.url,
         project: row.project,
         archive_path: row.archive_path,

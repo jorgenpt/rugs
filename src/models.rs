@@ -1,6 +1,7 @@
 use std::num::NonZeroI64;
 
 use chrono::{DateTime, Utc};
+use num_derive::{FromPrimitive, ToPrimitive};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
@@ -13,7 +14,9 @@ pub struct LatestResponseV1 {
     pub last_build_id: i64,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug, Serialize_repr, Deserialize_repr)]
+#[derive(
+    Clone, Copy, PartialEq, Debug, Serialize_repr, Deserialize_repr, FromPrimitive, ToPrimitive,
+)]
 #[repr(u8)]
 pub enum BuildDataResult {
     Starting = 0,
