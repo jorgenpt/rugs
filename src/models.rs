@@ -51,15 +51,3 @@ pub struct CreateBadge {
     pub project: String,
     pub archive_path: Option<String>,
 }
-
-fn default_request_root() -> String {
-    "/".to_owned()
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Config {
-    pub user_auth: String,
-    pub ci_auth: String,
-    #[serde(default = "default_request_root")]
-    pub request_root: String,
-}
