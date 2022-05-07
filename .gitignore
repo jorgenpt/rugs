@@ -1,3 +1,4 @@
 /target
 /config.json
-/metadata.db*
+/*.db
+/*.db-*
