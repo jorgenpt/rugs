@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use axum::{
     http::{self, Request, StatusCode},
     middleware::{self, Next},
@@ -6,15 +6,30 @@ use axum::{
     routing::{get, post},
     Extension, Router,
 };
+use clap::Parser;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use tracing::error;
 
-use std::{fs::File, io::BufReader, net::SocketAddr, path::Path};
+use std::{fmt::Display, fs::File, io::BufReader, net::SocketAddr, path::Path};
 
 use rugs::handlers::*;
+
+/// A simple authenticated metadata server for UGS
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+    /// Config file to load settings from
+    #[clap(long, default_value = "config.json")]
+    config: String,
+
+    /// Path to the sqlite database to use for persistence (you can
+    /// use `:memory:` to not persist))
+    #[clap(long, default_value = "metadata.db")]
+    database: String,
+}
 
 fn default_request_root() -> String {
     "/".to_owned()
@@ -33,11 +48,12 @@ struct Config {
 }
 
 /// Parse a `Config` from JSON at the given path
-fn read_config_from_file<P: AsRef<Path>>(path: P) -> Result<Config> {
-    let file = File::open(path)?;
+fn read_config_from_file<P: AsRef<Path> + Display>(path: P) -> Result<Config> {
+    let file = File::open(&path).with_context(|| format!("Failed to read config from {}", path))?;
     let reader = BufReader::new(file);
 
-    let config = serde_json::from_reader(reader)?;
+    let config = serde_json::from_reader(reader)
+        .with_context(|| format!("Failed to parse config in {}", path))?;
     Ok(config)
 }
 
@@ -80,9 +96,13 @@ pub async fn health() {}
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
-    let config = read_config_from_file("config.json")?;
+    let args = Args::parse();
 
-    let pool = SqlitePool::connect("sqlite:metadata.db").await?;
+    let config = read_config_from_file(args.config)?;
+
+    let pool = SqlitePool::connect(&format!("sqlite:{}", args.database))
+        .await
+        .with_context(|| format!("Could not open database at {}", args.database))?;
 
     // Configure routes that require the `user_auth` token (these are expected to come from
     // the UGS client).
