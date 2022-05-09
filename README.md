@@ -28,7 +28,7 @@ empty).
 By default RUGS exposes a `/health` API which can be used to check if the service is running. It'll return an empty 200 status.
 
 You can configure UGS by adding a section like the following to your `UnrealGameSync.ini`
-after applying [this pull request (TODO)](#) to your UGS which adds support for 
+after applying [this pull request](https://github.com/EpicGames/UnrealEngine/pull/9168) to your UGS which adds support for 
 credentials:
 
 ```ini
