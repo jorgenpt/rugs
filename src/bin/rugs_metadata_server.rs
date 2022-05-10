@@ -13,7 +13,7 @@ use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use tracing::error;
 
-use std::{fmt::Display, fs::File, io::BufReader, net::SocketAddr, path::Path};
+use std::{fmt::Display, fs::File, io::BufReader, net::SocketAddr, path::Path, sync::Arc};
 
 use rugs::handlers::*;
 
@@ -122,6 +122,7 @@ async fn main() -> Result<()> {
         .route("/build", post(build_create))
         // Back compat with old PostBadgeStatus.exe which uses the wrong case
         .route("/Build", post(build_create))
+        .route("/rugs_metrics", get(metrics_index))
         .layer(middleware::from_fn(move |req, next| {
             auth(req, next, config.ci_auth.clone())
         }));
@@ -141,10 +142,13 @@ async fn main() -> Result<()> {
         app
     };
 
+    let metrics = Arc::new(Metrics::default());
+
     let app = app.layer(
         ServiceBuilder::new()
             .layer(TraceLayer::new_for_http())
-            .layer(Extension(pool)),
+            .layer(Extension(pool))
+            .layer(Extension(metrics)),
     );
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));

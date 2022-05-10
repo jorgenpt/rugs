@@ -1,13 +1,26 @@
 use anyhow::anyhow;
 use axum::{extract::Query, http::StatusCode, response::IntoResponse, Extension, Json};
 use num_traits::FromPrimitive;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tracing::{error, info};
 
-use std::num::NonZeroI64;
+use std::{
+    num::NonZeroI64,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
+};
 
 use crate::{error::AppError, models::*};
+
+#[derive(Debug, Default)]
+pub struct Metrics {
+    pub latest_requests: AtomicU32,
+    pub build_index_requests: AtomicU32,
+    pub build_create_requests: AtomicU32,
+}
 
 async fn get_or_add_project(pool: &SqlitePool, project_name: &str) -> Result<i64, AppError> {
     let record = sqlx::query!(
@@ -30,6 +43,21 @@ async fn get_or_add_project(pool: &SqlitePool, project_name: &str) -> Result<i64
     }
 }
 
+pub async fn metrics_index(Extension(metrics): Extension<Arc<Metrics>>) -> impl IntoResponse {
+    #[derive(Serialize)]
+    struct MetricsResponse {
+        pub latest_requests: u32,
+        pub build_index_requests: u32,
+        pub build_create_requests: u32,
+    }
+
+    Json(MetricsResponse {
+        latest_requests: metrics.latest_requests.load(Ordering::Relaxed),
+        build_index_requests: metrics.build_index_requests.load(Ordering::Relaxed),
+        build_create_requests: metrics.build_create_requests.load(Ordering::Relaxed),
+    })
+}
+
 #[derive(Debug, Deserialize)]
 pub struct LatestParams {
     project: String,
@@ -37,8 +65,10 @@ pub struct LatestParams {
 
 pub async fn latest(
     Extension(pool): Extension<SqlitePool>,
+    Extension(metrics): Extension<Arc<Metrics>>,
     params: Query<LatestParams>,
 ) -> Result<impl IntoResponse, AppError> {
+    metrics.latest_requests.fetch_add(1, Ordering::Relaxed);
     let row = sqlx::query!(
         "SELECT id FROM badges INNER JOIN projects USING(project_id) WHERE project = ? ORDER BY id DESC LIMIT 1",
         params.project
@@ -63,8 +93,10 @@ pub struct BadgesParams {
 /// Handler for GET /build?project=foo&lastbuildid=42, returns a filtered list of badges
 pub async fn build_index(
     Extension(pool): Extension<SqlitePool>,
+    Extension(metrics): Extension<Arc<Metrics>>,
     params: Query<BadgesParams>,
 ) -> Result<impl IntoResponse, AppError> {
+    metrics.build_index_requests.fetch_add(1, Ordering::Relaxed);
     info!(
         "project: {}, build id: {}",
         params.project, params.lastbuildid
@@ -103,8 +135,12 @@ pub async fn build_index(
 /// Handler for POST /api/build, creates a new badge with the given info
 pub async fn build_create(
     Extension(pool): Extension<SqlitePool>,
+    Extension(metrics): Extension<Arc<Metrics>>,
     Json(badge): Json<CreateBadge>,
 ) -> Result<impl IntoResponse, AppError> {
+    metrics
+        .build_create_requests
+        .fetch_add(1, Ordering::Relaxed);
     let project_id = get_or_add_project(&pool, &badge.project).await?;
     let added_at = chrono::Utc::now();
     let result = badge.result as u8;
