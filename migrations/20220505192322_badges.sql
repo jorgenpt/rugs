@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS projects
 (
   project_id INTEGER PRIMARY KEY NOT NULL,
-  project  TEXT NOT NULL
+  project    TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS badges
