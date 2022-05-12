@@ -1,110 +1,34 @@
 {
   "db": "SQLite",
-  "1180e3f5ea2ab4dba0a48266c899690d41e2a829c381123e1c5964cb95df6962": {
+  "097af1c429b1ecce64dd443daa441623ddabe56b157a80d42fffa17b60823266": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "INSERT INTO projects (stream, project) VALUES (?, ?)"
+  },
+  "67fa42b277f1ca5214cb3737a58f22f403f4902a934e8b9abc81baa2a25b13a8": {
     "describe": {
       "columns": [
         {
-          "name": "id",
+          "name": "project_id",
           "ordinal": 0,
           "type_info": "Int64"
-        },
-        {
-          "name": "change_number",
-          "ordinal": 1,
-          "type_info": "Int64"
-        },
-        {
-          "name": "added_at",
-          "ordinal": 2,
-          "type_info": "Datetime"
-        },
-        {
-          "name": "build_type",
-          "ordinal": 3,
-          "type_info": "Text"
-        },
-        {
-          "name": "result",
-          "ordinal": 4,
-          "type_info": "Int64"
-        },
-        {
-          "name": "url",
-          "ordinal": 5,
-          "type_info": "Text"
-        },
-        {
-          "name": "project_id",
-          "ordinal": 6,
-          "type_info": "Int64"
-        },
-        {
-          "name": "archive_path",
-          "ordinal": 7,
-          "type_info": "Text"
-        },
-        {
-          "name": "project",
-          "ordinal": 8,
-          "type_info": "Text"
         }
       ],
       "nullable": [
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        true,
         false
       ],
       "parameters": {
         "Right": 2
       }
     },
-    "query": "SELECT * FROM badges INNER JOIN projects USING(project_id) WHERE id > ? AND project = ? ORDER BY id ASC"
+    "query": "SELECT project_id FROM projects WHERE stream = ? AND project = ? LIMIT 1"
   },
-  "1a01797bc68e6550c12b8481d3e1be41a86de72f805631c2d93c00af65f5e3cb": {
-    "describe": {
-      "columns": [
-        {
-          "name": "project_id",
-          "ordinal": 0,
-          "type_info": "Int64"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Right": 1
-      }
-    },
-    "query": "SELECT project_id FROM projects WHERE project = ? LIMIT 1"
-  },
-  "6eec0681c6e726ec09d95d424bbada44b1d44e666a1bd2c40aa2bfc09ebf02b9": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Right": 7
-      }
-    },
-    "query": "INSERT INTO badges (change_number, added_at, build_type, result, url, project_id, archive_path) VALUES (?, ?, ?, ?, ?, ?, ?)"
-  },
-  "bb14e9f4fea35bfe8beaf49885341136c1db55551bcf2b02399777d40c97b867": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Right": 1
-      }
-    },
-    "query": "INSERT INTO projects (project) VALUES (?)"
-  },
-  "f3897880e586cff3c221d3658677706ea8263c918ea297676e4142a9bae52048": {
+  "9f68804cc09c1fdabc3d6a85d9bea778fa184456af9e9a203bd5fd577e947943": {
     "describe": {
       "columns": [
         {
@@ -117,9 +41,19 @@
         false
       ],
       "parameters": {
-        "Right": 1
+        "Right": 2
       }
     },
-    "query": "SELECT id FROM badges INNER JOIN projects USING(project_id) WHERE project = ? ORDER BY id DESC LIMIT 1"
+    "query": "SELECT id FROM badges INNER JOIN projects USING(project_id) WHERE stream = ? AND project = ? ORDER BY id DESC LIMIT 1"
+  },
+  "a57cb5661634400029531218e5917da7b2699816e68b5231a49550d8ba5ff586": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 6
+      }
+    },
+    "query": "INSERT INTO badges (change_number, added_at, build_type, result, url, project_id) VALUES (?, ?, ?, ?, ?, ?)"
   }
 }

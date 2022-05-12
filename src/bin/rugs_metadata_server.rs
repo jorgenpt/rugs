@@ -117,11 +117,12 @@ fn app(config: Config, pool: SqlitePool) -> Router {
     // Configure routes that require the `user_auth` token (these are expected to come from
     // the UGS client).
     let user_routes = Router::new()
-        .route("/latest", get(latest))
+        .route("/latest", get(latest_index))
         .route("/build", get(build_index))
         .route("/event", get(event_index))
         .route("/comment", get(comment_index))
         .route("/issues", get(issue_index))
+        .route("/metadata", get(metadata_index))
         .layer(middleware::from_fn(move |req, next| {
             auth(req, next, config.user_auth.clone())
         }));
