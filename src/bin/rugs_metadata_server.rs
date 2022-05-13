@@ -104,6 +104,16 @@ async fn main() -> Result<()> {
         .await
         .with_context(|| format!("Could not open database at {}", args.database))?;
 
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+    tracing::debug!("listening on {}", addr);
+    axum::Server::bind(&addr)
+        .serve(app(config, pool).into_make_service())
+        .await?;
+
+    Ok(())
+}
+
+fn app(config: Config, pool: SqlitePool) -> Router {
     // Configure routes that require the `user_auth` token (these are expected to come from
     // the UGS client).
     let user_routes = Router::new()
@@ -144,18 +154,104 @@ async fn main() -> Result<()> {
 
     let metrics = Arc::new(Metrics::default());
 
-    let app = app.layer(
+    app.layer(
         ServiceBuilder::new()
             .layer(TraceLayer::new_for_http())
             .layer(Extension(pool))
             .layer(Extension(metrics)),
-    );
+    )
+}
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
-    tracing::debug!("listening on {}", addr);
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await?;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use tower::{Service, ServiceExt};
 
-    Ok(())
+    const CI_AUTH: &str = "ci:ci";
+    const USER_AUTH: &str = "user:user";
+
+    fn config() -> Config {
+        Config {
+            user_auth: USER_AUTH.to_string(),
+            ci_auth: CI_AUTH.to_string(),
+            request_root: "/".to_string(),
+        }
+    }
+
+    async fn pool() -> Result<SqlitePool> {
+        SqlitePool::connect("sqlite::memory:")
+            .await
+            .with_context(|| "Could not open in-memory sqlite db")
+    }
+
+    #[tokio::test]
+    async fn health() -> Result<()> {
+        let mut app = app(config(), pool().await?);
+
+        let response = app
+            .ready()
+            .await?
+            .call(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .ready()
+            .await?
+            .call(
+                Request::builder()
+                    .uri("/test/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn health_with_root() -> Result<()> {
+        let cfg = Config {
+            request_root: String::from("/test"),
+            ..config()
+        };
+        let mut app = app(cfg, pool().await?);
+
+        let response = app
+            .ready()
+            .await?
+            .call(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await?;
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .ready()
+            .await?
+            .call(
+                Request::builder()
+                    .uri("/test/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        Ok(())
+    }
 }
