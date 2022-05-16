@@ -44,4 +44,4 @@ post badges to `https://ci_auth_user:ci_auth_passwordd@my.rugs.local`.
 ## Caveats
 
 Currently RUGS only support badges, it does not support reviews & build information from 
-users. That'll come soon
+users. That'll come soon.
