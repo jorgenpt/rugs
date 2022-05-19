@@ -170,6 +170,7 @@ mod tests {
         body::Body,
         http::{Request, StatusCode},
     };
+    use rugs::models::CreateBadge;
     use tower::{Service, ServiceExt};
 
     const CI_AUTH: &str = "ci:ci";
@@ -184,11 +185,16 @@ mod tests {
     }
 
     async fn pool() -> Result<SqlitePool> {
-        SqlitePool::connect("sqlite::memory:")
+        let pool = SqlitePool::connect("sqlite::memory:")
             .await
-            .with_context(|| "Could not open in-memory sqlite db")
+            .with_context(|| "Could not open in-memory sqlite db")?;
+
+        sqlx::migrate!("./migrations").run(&pool).await?;
+
+        Ok(pool)
     }
 
+    /// Test the basic /health API
     #[tokio::test]
     async fn health() -> Result<()> {
         let mut app = app(config(), pool().await?);
@@ -196,31 +202,21 @@ mod tests {
         let response = app
             .ready()
             .await?
-            .call(
-                Request::builder()
-                    .uri("/health")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+            .call(Request::builder().uri("/health").body(Body::empty())?)
+            .await?;
         assert_eq!(response.status(), StatusCode::OK);
 
         let response = app
             .ready()
             .await?
-            .call(
-                Request::builder()
-                    .uri("/test/health")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .call(Request::builder().uri("/test/health").body(Body::empty())?)
             .await?;
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
         Ok(())
     }
 
+    /// Test the basic /health API with a `request_root` configured
     #[tokio::test]
     async fn health_with_root() -> Result<()> {
         let cfg = Config {
@@ -232,12 +228,7 @@ mod tests {
         let response = app
             .ready()
             .await?
-            .call(
-                Request::builder()
-                    .uri("/health")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .call(Request::builder().uri("/health").body(Body::empty())?)
             .await?;
 
         assert_eq!(response.status(), StatusCode::OK);
@@ -245,14 +236,243 @@ mod tests {
         let response = app
             .ready()
             .await?
-            .call(
-                Request::builder()
-                    .uri("/test/health")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .call(Request::builder().uri("/test/health").body(Body::empty())?)
             .await?;
         assert_eq!(response.status(), StatusCode::OK);
+        Ok(())
+    }
+
+    /// Helper to format an `Authorization:` header for HTTP Basic Auth requests
+    fn authorization_header(token: &str) -> String {
+        format!("Basic {}", base64::encode(token))
+    }
+
+    /// Helper to create HTTP requests
+    fn request_builder(
+        uri: &str,
+        method: &str,
+        authorization: Option<String>,
+    ) -> http::request::Builder {
+        let builder = Request::builder()
+            .uri(uri)
+            .method(method)
+            .header(http::header::CONTENT_TYPE, "application/json");
+
+        if let Some(authorization) = authorization {
+            builder.header(http::header::AUTHORIZATION, authorization)
+        } else {
+            builder
+        }
+    }
+
+    /// Test that we require auth on all the common user routes
+    #[tokio::test]
+    async fn user_auth_required() -> Result<()> {
+        let paths = vec![
+            "/api/latest",
+            "/api/build",
+            "/api/event",
+            "/api/comment",
+            "/api/issues",
+            "/api/metadata",
+        ];
+
+        // First test without any credentials
+        let requests_without_auth = paths
+            .iter()
+            .map(|path| request_builder(path, "GET", None).body(Body::empty()));
+        // First test with bad credentials
+        let requests_with_bad_auth = paths.iter().map(|path| {
+            request_builder(path, "GET", Some(authorization_header("user:wrong")))
+                .body(Body::empty())
+        });
+
+        let requests = requests_without_auth
+            .chain(requests_with_bad_auth)
+            .collect::<Vec<_>>();
+
+        let mut app = app(config(), pool().await?);
+
+        for request in requests {
+            let response = app.ready().await?.call(request?).await?;
+            assert_eq!(
+                response.status(),
+                StatusCode::UNAUTHORIZED,
+                "body: {:?}",
+                hyper::body::to_bytes(response.into_body()).await?
+            );
+        }
+        Ok(())
+    }
+
+    /// Helper to create a basic badge request
+    fn simple_create_request() -> CreateBadge {
+        CreateBadge {
+            change_number: 1,
+            url: String::from("http://test.com"),
+            build_type: String::from("Editor"),
+            result: rugs::models::BadgeResult::Starting,
+            project: String::from("//depot/stream/proj"),
+        }
+    }
+
+    /// Test that we allow requests for user routes when the credentials are correct
+    #[tokio::test]
+    async fn user_auth_works() -> Result<()> {
+        let app = app(config(), pool().await?);
+
+        let create_request = simple_create_request();
+        let body = serde_json::to_vec(&create_request)?;
+        let response = app
+            .oneshot(
+                request_builder(
+                    "/api/build?project=//depot/stream/proj&lastbuildid=0",
+                    "GET",
+                    Some(authorization_header(USER_AUTH)),
+                )
+                .body(Body::from(body))?,
+            )
+            .await?;
+
+        assert_eq!(
+            response.status(),
+            StatusCode::OK,
+            "body: {:?}",
+            hyper::body::to_bytes(response.into_body()).await?
+        );
+        Ok(())
+    }
+
+    /// Test that we require auth for the CI routes
+    #[tokio::test]
+    async fn ci_auth_required() -> Result<()> {
+        let mut app = app(config(), pool().await?);
+
+        let create_request = simple_create_request();
+
+        // First test without any credentials
+        let response = app
+            .ready()
+            .await?
+            .call(
+                request_builder("/api/build", "POST", None)
+                    .body(Body::from(serde_json::to_vec(&create_request)?))?,
+            )
+            .await?;
+        assert_eq!(
+            response.status(),
+            StatusCode::UNAUTHORIZED,
+            "body: {:?}",
+            hyper::body::to_bytes(response.into_body()).await?
+        );
+
+        // Then test with bogus credentials
+        let response = app
+            .ready()
+            .await?
+            .call(
+                request_builder(
+                    "/api/build",
+                    "POST",
+                    Some(authorization_header("ci:invalid")),
+                )
+                .body(Body::from(serde_json::to_vec(&create_request)?))?,
+            )
+            .await?;
+        assert_eq!(
+            response.status(),
+            StatusCode::UNAUTHORIZED,
+            "body: {:?}",
+            hyper::body::to_bytes(response.into_body()).await?
+        );
+        Ok(())
+    }
+
+    /// Test that we allow requests for CI routes when the credentials are correct
+    #[tokio::test]
+    async fn ci_auth_works() -> Result<()> {
+        let app = app(config(), pool().await?);
+
+        let create_request = simple_create_request();
+        let body = serde_json::to_vec(&create_request)?;
+        let response = app
+            .oneshot(
+                request_builder("/api/build", "POST", Some(authorization_header(CI_AUTH)))
+                    .body(Body::from(body))?,
+            )
+            .await?;
+
+        assert_eq!(
+            response.status(),
+            StatusCode::OK,
+            "body: {:?}",
+            hyper::body::to_bytes(response.into_body()).await?
+        );
+        Ok(())
+    }
+
+    /// Test that we can submit build badges and then read them back
+    #[tokio::test]
+    async fn metadata_integration() -> Result<()> {
+        let mut app = app(config(), pool().await?);
+
+        let creates = [
+            CreateBadge {
+                change_number: 1,
+                url: String::from("http://test.com"),
+                build_type: String::from("Editor"),
+                result: rugs::models::BadgeResult::Starting,
+                project: String::from("//depot/stream/proj"),
+            },
+            CreateBadge {
+                change_number: 1,
+                url: String::from("http://test.com"),
+                build_type: String::from("Standalone"),
+                result: rugs::models::BadgeResult::Starting,
+                project: String::from("//depot/stream/proj"),
+            },
+            CreateBadge {
+                change_number: 1,
+                url: String::from("http://test.com"),
+                build_type: String::from("Editor"),
+                result: rugs::models::BadgeResult::Success,
+                project: String::from("//depot/stream/proj"),
+            },
+        ];
+
+        for create in creates {
+            let body = serde_json::to_vec(&create)?;
+
+            let response = app
+                .ready()
+                .await?
+                .call(
+                    request_builder("/api/build", "POST", Some(authorization_header(CI_AUTH)))
+                        .body(Body::from(body))?,
+                )
+                .await?;
+
+            assert_eq!(response.status(), StatusCode::OK);
+        }
+
+        let response = app
+            .ready()
+            .await?
+            .call(
+                request_builder(
+                    "/api/metadata?stream=//depot/stream&project=proj&sequence=0&minchange=0",
+                    "GET",
+                    Some(authorization_header(USER_AUTH)),
+                )
+                .body(Body::empty())?,
+            )
+            .await?;
+        let status = response.status();
+        let body = hyper::body::to_bytes(response.into_body()).await?;
+        assert_eq!(status, StatusCode::OK, "body: {:?}", body);
+
+        // TODO: Deserialize and verify the response data
+
         Ok(())
     }
 }
