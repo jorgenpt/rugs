@@ -246,6 +246,14 @@ pub struct MetadataIndexParams {
     sequence: Option<i64>,
 }
 
+#[derive(sqlx::FromRow)]
+struct Change {
+    change_number: i64,
+    project_id: i64,
+    stream: String,
+    project: String,
+}
+
 /// Handler for GET /metadata (Used by v2 API clients)
 pub async fn metadata_index(
     Extension(pool): Extension<SqlitePool>,
@@ -271,63 +279,64 @@ pub async fn metadata_index(
         filters.push("project = ?");
     }
 
-    // We intentionally order these so that we'll get our rows back in contiguous groups of change_number, and internally in those
-    // groups they'll be grouped by project_id, and finally those little chunks will be sorted by id (from old to new). We don't send
-    // the ID, so to manage newness the order here matters. (We could also only send the most recent badge for each
-    // (change_number, build_result) pair, but the client will take care of figuring out which the most recent is if we order them right.)
-    let query_string = format!(
-        "SELECT * FROM badges INNER JOIN projects USING(project_id) WHERE {} ORDER BY change_number ASC, project_id ASC, id ASC",
+    let changelist_query_string = format!(
+        "SELECT change_number, project_id, stream, project FROM badges INNER JOIN projects USING(project_id) WHERE {} GROUP BY change_number, project_id",
         filters.join(" AND ")
     );
 
-    let mut query = sqlx::query_as::<sqlx::Sqlite, Badge>(&query_string);
+    let mut changelist_query = sqlx::query_as::<sqlx::Sqlite, Change>(&changelist_query_string);
 
     if let Some(sequence) = params.sequence {
-        query = query.bind(sequence);
+        changelist_query = changelist_query.bind(sequence);
     }
 
-    query = query.bind(params.minchange);
+    changelist_query = changelist_query.bind(params.minchange);
     if let Some(maxchange) = params.maxchange {
-        query = query.bind(maxchange);
+        changelist_query = changelist_query.bind(maxchange);
     }
 
-    query = query.bind(&params.stream);
+    changelist_query = changelist_query.bind(&params.stream);
     if let Some(project) = &params.project {
-        query = query.bind(project);
+        changelist_query = changelist_query.bind(project);
     }
 
-    let badges = query.fetch_all(&pool).await?;
+    let changelists = changelist_query.fetch_all(&pool).await?;
 
     let mut response = GetMetadataListResponseV2 {
         sequence_number: 0,
         items: Vec::new(),
     };
 
-    for badge in badges {
-        response.sequence_number = response.sequence_number.max(badge.id);
-        let needs_new_record = !response
-            .items
-            .last()
-            .map_or(false, |r| r.matches(&badge.project, badge.change_number));
-        if needs_new_record {
-            response.items.push(GetMetadataResponseV2 {
-                project: badge.project,
-                change: badge.change_number,
-                users: Vec::new(),
-                badges: Vec::new(),
-            });
-        }
+    for changelist in changelists {
+        // We intentionally order these by id (from old to new). We don't send the ID, so to manage newness the order here matters.
+        // (We could also only send the most recent badge for each (change_number, build_result) pair, but the client will take care
+        // of figuring out which the most recent is if we order them right.)
+        let mut query = sqlx::query_as::<sqlx::Sqlite, Badge>(
+            "SELECT * FROM badges WHERE change_number = ? AND project_id = ? ORDER BY id ASC",
+        );
 
-        response
-            .items
-            .last_mut()
-            .unwrap()
-            .badges
-            .push(GetBadgeDataResponseV2 {
-                name: badge.build_type,
-                url: badge.url,
-                state: badge.result,
-            });
+        query = query.bind(changelist.change_number);
+        query = query.bind(changelist.project_id);
+
+        let badges = query.fetch_all(&pool).await?;
+
+        response.sequence_number = response
+            .sequence_number
+            .max(badges.iter().map(|b| b.id).max().unwrap_or(0));
+
+        response.items.push(GetMetadataResponseV2 {
+            project: format!("{}/{}", changelist.stream, changelist.project),
+            change: changelist.change_number,
+            users: Vec::new(),
+            badges: badges
+                .into_iter()
+                .map(|badge| GetBadgeDataResponseV2 {
+                    name: badge.build_type,
+                    url: badge.url,
+                    state: badge.result,
+                })
+                .collect(),
+        });
     }
 
     debug!("GET /metadata response: {:?}", response);

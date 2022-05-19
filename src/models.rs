@@ -42,8 +42,6 @@ pub struct Badge {
     pub build_type: String,
     pub result: BadgeResult,
     pub url: String,
-    pub stream: String,
-    pub project: String,
 }
 
 /// This maps to `BuildData` in MetadataServer, `BadgeData` in UGS
