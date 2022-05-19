@@ -165,13 +165,11 @@ pub async fn build_index(
         )
     })?;
 
-    let badges = sqlx::query_as::<sqlx::Sqlite, Badge>(
+    let query = sqlx::query_as::<sqlx::Sqlite, Badge>(
         "SELECT * FROM badges INNER JOIN projects USING(project_id) WHERE id > ? AND stream = ? AND project = ? ORDER BY id ASC"
-    ).bind(
-        params.lastbuildid).bind(
-        stream).bind(project)
-    .fetch_all(&pool)
-    .await?;
+    );
+    let query = query.bind(params.lastbuildid).bind(stream).bind(project);
+    let badges = query.fetch_all(&pool).await?;
 
     debug!("GET /build response: {:?}", badges);
 
