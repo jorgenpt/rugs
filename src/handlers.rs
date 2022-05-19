@@ -271,8 +271,12 @@ pub async fn metadata_index(
         filters.push("project = ?");
     }
 
+    // We intentionally order these so that we'll get our rows back in contiguous groups of change_number, and internally in those
+    // groups they'll be grouped by project_id, and finally those little chunks will be sorted by id (from old to new). We don't send
+    // the ID, so to manage newness the order here matters. (We could also only send the most recent badge for each
+    // (change_number, build_result) pair, but the client will take care of figuring out which the most recent is if we order them right.)
     let query_string = format!(
-        "SELECT * FROM badges INNER JOIN projects USING(project_id) WHERE {} ORDER BY project_id ASC, change_number ASC",
+        "SELECT * FROM badges INNER JOIN projects USING(project_id) WHERE {} ORDER BY change_number ASC, project_id ASC, id ASC",
         filters.join(" AND ")
     );
 
