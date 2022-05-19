@@ -55,7 +55,6 @@ pub struct CreateBadge {
     pub result: BadgeResult,
     pub url: String,
     pub project: String,
-    pub archive_path: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
