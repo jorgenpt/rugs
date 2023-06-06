@@ -11,13 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         id: toolchain
-        with:
-          toolchain: stable
-      - name: cargo cache
-        uses: actions/cache@v3
-        continue-on-error: false
+      - uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/bin/
@@ -25,7 +21,7 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/            
-          key: ${{ runner.os }}-cargo-${{ steps.toolchain.rustc_hash }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-${{ steps.toolchain.rustc_hash }}
+          key: ${{ runner.os }}-cargo-${{ steps.toolchain.cachekey }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-${{ steps.toolchain.cachekey }}
       - run: cargo build --release --all-features
       - run: cargo test
