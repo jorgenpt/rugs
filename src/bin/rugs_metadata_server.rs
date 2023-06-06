@@ -6,6 +6,7 @@ use axum::{
     routing::{get, post},
     Extension, Router,
 };
+use base64::prelude::*;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -67,7 +68,7 @@ async fn auth<B>(req: Request<B>, next: Next<B>, required_auth: String) -> impl 
             .to_str()
             .ok()
             .and_then(|header| header.strip_prefix("Basic "))
-            .and_then(|authorization_b64| base64::decode(authorization_b64).ok())
+            .and_then(|authorization_b64| BASE64_STANDARD.decode(authorization_b64).ok())
             .and_then(|bytes| String::from_utf8(bytes).ok());
 
         match authorization {
@@ -244,7 +245,7 @@ mod tests {
 
     /// Helper to format an `Authorization:` header for HTTP Basic Auth requests
     fn authorization_header(token: &str) -> String {
-        format!("Basic {}", base64::encode(token))
+        format!("Basic {}", BASE64_STANDARD.encode(token))
     }
 
     /// Helper to create HTTP requests
