@@ -122,7 +122,7 @@ fn app(config: Config, pool: SqlitePool) -> Router {
         .route("/event", get(event_index))
         .route("/comment", get(comment_index))
         .route("/issues", get(issue_index))
-        .route("/metadata", get(metadata_index))
+        .route("/metadata", get(metadata_index).post(metadata_submit))
         .layer(middleware::from_fn(move |req, next| {
             auth(req, next, config.user_auth.clone())
         }));

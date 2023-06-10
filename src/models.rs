@@ -55,13 +55,28 @@ pub struct CreateBadge {
     pub project: String,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, sqlx::Type)]
+#[repr(u8)]
 pub enum UgsUserVote {
-    None,
-    CompileSuccess,
-    CompileFailure,
-    Good,
-    Bad,
+    None = 0,
+    CompileSuccess = 1,
+    CompileFailure = 2,
+    Good = 3,
+    Bad = 4,
+}
+
+#[derive(Clone, Debug, Default, sqlx::FromRow)]
+pub struct UserEvent {
+    pub id: i64,
+    pub change_number: i64,
+    pub user_name: String,
+    pub sequence: i64,
+    pub updated_at: DateTime<Utc>,
+    pub synced_at: Option<DateTime<Utc>>,
+    pub vote: Option<UgsUserVote>,
+    pub starred: Option<bool>,
+    pub investigating: Option<bool>,
+    pub comment: Option<String>,
 }
 
 /// This maps to `GetUserDataResponseV2` in UGS
@@ -71,7 +86,7 @@ pub struct GetUserDataResponseV2 {
     pub user: String,
     pub sync_time: Option<i64>,
     pub vote: Option<UgsUserVote>,
-    pub comment: String,
+    pub comment: Option<String>,
     pub investigating: Option<bool>,
     pub starred: Option<bool>,
 }

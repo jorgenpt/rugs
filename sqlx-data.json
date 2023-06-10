@@ -46,6 +46,16 @@
     },
     "query": "SELECT project_id FROM projects WHERE stream = ? AND project = ? LIMIT 1"
   },
+  "f3e070b134ccb4d1ca5fe648abfbf38602f1a3c9f128379f419aef7d367af836": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 8
+      }
+    },
+    "query": "UPDATE user_events SET sequence = ?, updated_at = ?, synced_at = ?, vote = ?, investigating = ?, starred = ?, comment = ? WHERE id = ?"
+  },
   "f661ddadf402f7ea698419ecb6dc87698d8c84999e3857b89923cab78027c3c4": {
     "describe": {
       "columns": [],
@@ -55,5 +65,15 @@
       }
     },
     "query": "INSERT INTO badges (sequence, change_number, added_at, build_type, result, url, project_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  },
+  "f69bfcdca1c2ce7ae04bc343f41c9898fa8565f4436c8aa24524f7a2e5850def": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 10
+      }
+    },
+    "query": "INSERT INTO user_events (project_id, change_number, user_name, sequence, updated_at, synced_at, vote, investigating, starred, comment) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   }
 }

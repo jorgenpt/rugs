@@ -4,9 +4,12 @@ use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tracing::{debug, error, info};
 
-use std::sync::{
-    atomic::{AtomicU32, Ordering},
-    Arc,
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
 };
 
 use crate::{error::AppError, models::*};
@@ -16,6 +19,7 @@ pub struct Metrics {
     pub latest_requests: AtomicU32,
     pub build_create_requests: AtomicU32,
     pub metadata_index_requests: AtomicU32,
+    pub metadata_submit_requests: AtomicU32,
 }
 
 fn find_starting_at(haystack: &str, needle: char, starting_index: usize) -> Option<usize> {
@@ -214,14 +218,6 @@ pub struct MetadataIndexParams {
     sequence: Option<i64>,
 }
 
-#[derive(sqlx::FromRow)]
-struct Change {
-    change_number: i64,
-    project_id: i64,
-    stream: String,
-    project: String,
-}
-
 /// Handler for GET /metadata (Used by v2 API clients)
 pub async fn metadata_index(
     Extension(pool): Extension<SqlitePool>,
@@ -232,82 +228,220 @@ pub async fn metadata_index(
         .metadata_index_requests
         .fetch_add(1, Ordering::Relaxed);
 
-    let mut filters = Vec::new();
-    if params.sequence.is_some() {
-        filters.push("sequence > ?");
-    }
-
-    filters.push("change_number >= ?");
-    if params.maxchange.is_some() {
-        filters.push("change_number <= ?")
-    }
-
-    filters.push("stream = ?");
-    if params.project.is_some() {
-        filters.push("project = ?");
-    }
-
-    let changelist_query_string = format!(
-        "SELECT change_number, project_id, stream, project FROM badges INNER JOIN projects USING(project_id) WHERE {} GROUP BY change_number, project_id",
-        filters.join(" AND ")
+    let project_query_string = format!(
+        "SELECT project_id, project FROM projects WHERE stream = ? {}",
+        params
+            .project
+            .is_some()
+            .then_some("AND project = ?")
+            .unwrap_or_default()
     );
 
-    let mut changelist_query = sqlx::query_as::<sqlx::Sqlite, Change>(&changelist_query_string);
-
-    if let Some(sequence) = params.sequence {
-        changelist_query = changelist_query.bind(sequence);
+    #[derive(sqlx::FromRow)]
+    struct Project {
+        project_id: i64,
+        project: String,
     }
 
-    changelist_query = changelist_query.bind(params.minchange);
-    if let Some(maxchange) = params.maxchange {
-        changelist_query = changelist_query.bind(maxchange);
-    }
-
-    changelist_query = changelist_query.bind(&params.stream);
+    let mut project_query =
+        sqlx::query_as::<sqlx::Sqlite, Project>(&project_query_string).bind(&params.stream);
     if let Some(project) = &params.project {
-        changelist_query = changelist_query.bind(project);
+        project_query = project_query.bind(project);
     }
 
-    let changelists = changelist_query.fetch_all(&pool).await?;
+    let projects = project_query.fetch_all(&pool).await?;
 
     let mut response = GetMetadataListResponseV2 {
         sequence_number: 0,
         items: Vec::new(),
     };
 
-    for changelist in changelists {
+    for project in projects {
+        let project_path = format!("{}/{}", params.stream, project.project);
+
+        let mut filters = Vec::new();
+        if params.sequence.is_some() {
+            filters.push("sequence > ?");
+        }
+
+        filters.push("change_number >= ?");
+        if params.maxchange.is_some() {
+            filters.push("change_number <= ?")
+        }
+
         // We intentionally order these by sequence (from old to new). We don't send the ID, so to manage newness the order here matters.
         // (We could also only send the most recent badge for each (change_number, build_result) pair, but the client will take care
         // of figuring out which the most recent is if we order them right.)
-        let mut query = sqlx::query_as::<sqlx::Sqlite, Badge>(
-            "SELECT * FROM badges WHERE change_number = ? AND project_id = ? ORDER BY sequence ASC",
+        let badge_query_string = format!(
+            "SELECT * FROM badges WHERE project_id = ? AND {} ORDER BY sequence ASC",
+            filters.join(" AND "),
         );
+        let mut badge_query = sqlx::query_as::<sqlx::Sqlite, Badge>(&badge_query_string);
 
-        query = query.bind(changelist.change_number);
-        query = query.bind(changelist.project_id);
+        badge_query = badge_query.bind(project.project_id);
+        if let Some(sequence) = params.sequence {
+            badge_query = badge_query.bind(sequence);
+        }
 
-        let badges = query.fetch_all(&pool).await?;
+        badge_query = badge_query.bind(params.minchange);
+        if let Some(maxchange) = params.maxchange {
+            badge_query = badge_query.bind(maxchange);
+        }
 
-        response.sequence_number = response
-            .sequence_number
-            .max(badges.iter().map(|b| b.sequence).max().unwrap_or(0));
+        let badges = badge_query.fetch_all(&pool).await?;
 
-        response.items.push(GetMetadataResponseV2 {
-            project: format!("{}/{}", changelist.stream, changelist.project),
-            change: changelist.change_number,
-            users: Vec::new(),
-            badges: badges
-                .into_iter()
-                .map(|badge| GetBadgeDataResponseV2 {
-                    name: badge.build_type,
-                    url: badge.url,
-                    state: badge.result,
-                })
-                .collect(),
-        });
+        let mut changelists = HashMap::<i64, GetMetadataResponseV2>::new();
+
+        for badge in badges {
+            response.sequence_number = response.sequence_number.max(badge.sequence);
+
+            let cl_badges =
+                changelists
+                    .entry(badge.change_number)
+                    .or_insert_with(|| GetMetadataResponseV2 {
+                        project: project_path.to_owned(),
+                        change: badge.change_number,
+                        users: Vec::new(),
+                        badges: Vec::new(),
+                    });
+            cl_badges.badges.push(GetBadgeDataResponseV2 {
+                name: badge.build_type,
+                url: badge.url,
+                state: badge.result,
+            });
+        }
+
+        // We intentionally order these by sequence (from old to new). We don't send the ID, so to manage newness the order here matters.
+        // (We could also only send the most recent badge for each (change_number, build_result) pair, but the client will take care
+        // of figuring out which the most recent is if we order them right.)
+        let user_event_query_string = format!(
+            "SELECT * FROM user_events WHERE project_id = ? AND {} ORDER BY sequence ASC",
+            filters.join(" AND "),
+        );
+        let mut user_event_query =
+            sqlx::query_as::<sqlx::Sqlite, UserEvent>(&user_event_query_string);
+
+        user_event_query = user_event_query.bind(project.project_id);
+        if let Some(sequence) = params.sequence {
+            user_event_query = user_event_query.bind(sequence);
+        }
+
+        user_event_query = user_event_query.bind(params.minchange);
+        if let Some(maxchange) = params.maxchange {
+            user_event_query = user_event_query.bind(maxchange);
+        }
+
+        let user_events = user_event_query.fetch_all(&pool).await?;
+
+        for user_event in user_events {
+            response.sequence_number = response.sequence_number.max(user_event.sequence);
+
+            let cl_badges = changelists
+                .entry(user_event.change_number)
+                .or_insert_with(|| GetMetadataResponseV2 {
+                    project: project_path.to_owned(),
+                    change: user_event.change_number,
+                    users: Vec::new(),
+                    badges: Vec::new(),
+                });
+
+            cl_badges.users.push(GetUserDataResponseV2 {
+                user: user_event.user_name,
+                sync_time: user_event.synced_at.map(|t| t.timestamp_micros() * 10),
+                vote: user_event.vote,
+                comment: user_event.comment,
+                investigating: user_event.investigating,
+                starred: user_event.starred,
+            });
+        }
+
+        // Doesn't look like ordering should matter, so don't bother sorting or anything
+        response.items.extend(changelists.into_values().into_iter());
     }
 
     debug!("GET /metadata response: {:?}", response);
 
     Ok(Json(response))
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct UpdateMetadataRequestV2 {
+    change: i64,
+    // This is technically a `string?` in C#, but required by the API unless we're submitting badges
+    stream: String,
+    project: Option<String>,
+    // This is technically a `string?` in C#, but required by the API unless we're submitting badges
+    user_name: String,
+    synced: Option<bool>,
+    vote: Option<UgsUserVote>,
+    investigating: Option<bool>,
+    starred: Option<bool>,
+    comment: Option<String>,
+}
+
+pub async fn metadata_submit(
+    Extension(pool): Extension<SqlitePool>,
+    Extension(metrics): Extension<Arc<Metrics>>,
+    Json(params): Json<UpdateMetadataRequestV2>,
+) -> Result<impl IntoResponse, AppError> {
+    metrics
+        .metadata_submit_requests
+        .fetch_add(1, Ordering::Relaxed);
+
+    let now = chrono::Utc::now();
+    let sequence_number = now.timestamp_micros();
+
+    let project_name = params.project.clone().unwrap_or_default();
+    let project_id = get_or_add_project(&pool, &params.stream, &project_name).await?;
+    let existing_event_query_string =
+        "SELECT * FROM user_events WHERE project_id = ? AND user_name = ? AND change_number = ?";
+    let existing_event_query =
+        sqlx::query_as::<sqlx::Sqlite, UserEvent>(&existing_event_query_string)
+            .bind(project_id)
+            .bind(&params.user_name)
+            .bind(params.change);
+    let user_event = existing_event_query.fetch_optional(&pool).await?;
+
+    let needs_insert = user_event.is_none();
+
+    let mut user_event = user_event.unwrap_or_else(UserEvent::default);
+    if params.synced.unwrap_or_default() {
+        user_event.synced_at = Some(now);
+    }
+
+    user_event.vote = params.vote.or(user_event.vote);
+    user_event.investigating = params.investigating.or(user_event.investigating);
+    user_event.starred = params.starred.or(user_event.starred);
+    user_event.comment = params.comment.or(user_event.comment);
+
+    if needs_insert {
+        sqlx::query!(
+            "INSERT INTO user_events (project_id, change_number, user_name, sequence, updated_at, synced_at, vote, investigating, starred, comment) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            project_id,
+            params.change,
+            params.user_name,
+            sequence_number,
+            now,
+            user_event.synced_at,
+            user_event.vote,
+            user_event.investigating,
+            user_event.starred,
+            user_event.comment,
+        ).execute(&pool).await?;
+    } else {
+        sqlx::query!(
+            "UPDATE user_events SET sequence = ?, updated_at = ?, synced_at = ?, vote = ?, investigating = ?, starred = ?, comment = ? WHERE id = ?",
+            sequence_number,
+            now,
+            user_event.synced_at,
+            user_event.vote,
+            user_event.investigating,
+            user_event.starred,
+            user_event.comment,
+            user_event.id,
+        ).execute(&pool).await?;
+    }
+
+    Ok((StatusCode::OK, ""))
 }
