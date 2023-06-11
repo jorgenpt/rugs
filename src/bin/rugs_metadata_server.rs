@@ -270,7 +270,6 @@ mod tests {
     async fn user_auth_required() -> Result<()> {
         let paths = vec![
             "/api/latest",
-            "/api/build",
             "/api/event",
             "/api/comment",
             "/api/issues",
@@ -326,7 +325,7 @@ mod tests {
         let response = app
             .oneshot(
                 request_builder(
-                    "/api/build?project=//depot/stream/proj&lastbuildid=0",
+                    "/api/latest?project=//depot/stream/proj",
                     "GET",
                     Some(authorization_header(USER_AUTH)),
                 )
