@@ -55,7 +55,7 @@ pub struct CreateBadge {
     pub project: String,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, sqlx::Type)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, sqlx::Type)]
 #[repr(u8)]
 pub enum UgsUserVote {
     None = 0,
@@ -80,7 +80,7 @@ pub struct UserEvent {
 }
 
 /// This maps to `GetUserDataResponseV2` in UGS
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct GetUserDataResponseV2 {
     pub user: String,
@@ -92,7 +92,7 @@ pub struct GetUserDataResponseV2 {
 }
 
 /// This maps to `GetBadgeDataResponseV2` in UGS
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct GetBadgeDataResponseV2 {
     pub name: String,
@@ -101,7 +101,7 @@ pub struct GetBadgeDataResponseV2 {
 }
 
 /// This maps to `GetMetadataResponseV2` in UGS
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct GetMetadataResponseV2 {
     pub change: i64,
@@ -117,7 +117,7 @@ impl GetMetadataResponseV2 {
 }
 
 /// This maps to `GetMetadataListResponseV2` in UGS
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct GetMetadataListResponseV2 {
     pub sequence_number: i64,

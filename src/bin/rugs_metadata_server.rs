@@ -415,17 +415,19 @@ mod tests {
         Ok(())
     }
 
-    async fn get_metadata(app: &mut Router) -> Result<GetMetadataListResponseV2> {
+    async fn get_metadata(
+        app: &mut Router,
+        stream: &str,
+        project_name: &str,
+    ) -> Result<GetMetadataListResponseV2> {
+        let url =
+            format!("/api/metadata?stream={stream}&project={project_name}&sequence=0&minchange=0");
         let response = app
             .ready()
             .await?
             .call(
-                request_builder(
-                    "/api/metadata?stream=//depot/stream&project=proj&sequence=0&minchange=0",
-                    "GET",
-                    Some(authorization_header(USER_AUTH)),
-                )
-                .body(Body::empty())?,
+                request_builder(&url, "GET", Some(authorization_header(USER_AUTH)))
+                    .body(Body::empty())?,
             )
             .await?;
         let status = response.status();
@@ -439,9 +441,12 @@ mod tests {
     /// Test that we can submit build badges and then read them back
     #[tokio::test]
     async fn metadata_integration() -> Result<()> {
+        const STREAM: &str = "//depot/stream;";
+        const PROJECT_NAME: &str = "proj";
+
         let mut app = app(config(), pool().await?);
 
-        let metadata = get_metadata(&mut app).await?;
+        let metadata = get_metadata(&mut app, STREAM, PROJECT_NAME).await?;
         assert_eq!(metadata.items.len(), 0);
         let old_sequence_number = metadata.sequence_number;
 
@@ -451,28 +456,28 @@ mod tests {
                 url: String::from("http://test.com"),
                 build_type: String::from("Editor"),
                 result: rugs::models::BadgeResult::Starting,
-                project: String::from("//depot/stream/proj"),
+                project: format!("{STREAM}/{PROJECT_NAME}"),
             },
             CreateBadge {
                 change_number: 1,
                 url: String::from("http://test.com"),
                 build_type: String::from("Standalone"),
                 result: rugs::models::BadgeResult::Starting,
-                project: String::from("//depot/stream/proj"),
+                project: format!("{STREAM}/{PROJECT_NAME}"),
             },
             CreateBadge {
                 change_number: 1,
                 url: String::from("http://test.com"),
                 build_type: String::from("Editor"),
                 result: rugs::models::BadgeResult::Success,
-                project: String::from("//depot/stream/proj"),
+                project: format!("{STREAM}/{PROJECT_NAME}"),
             },
             CreateBadge {
                 change_number: 2,
                 url: String::from("http://test.com"),
                 build_type: String::from("Editor"),
                 result: rugs::models::BadgeResult::Starting,
-                project: String::from("//depot/stream/proj"),
+                project: format!("{STREAM}/{PROJECT_NAME}"),
             },
         ];
 
@@ -491,7 +496,7 @@ mod tests {
             assert_eq!(response.status(), StatusCode::OK);
         }
 
-        let response = get_metadata(&mut app).await?;
+        let response = get_metadata(&mut app, STREAM, PROJECT_NAME).await?;
         assert!(response.sequence_number > old_sequence_number);
         assert_eq!(response.items.len(), 2);
         let cl1_item = response.items.iter().find(|item| item.change == 1);
@@ -501,6 +506,61 @@ mod tests {
         let cl2_item = response.items.iter().find(|item| item.change == 2);
         assert!(cl2_item.is_some());
         assert_eq!(cl2_item.unwrap().badges.len(), 1);
+
+        Ok(())
+    }
+
+    /// Test that we can submit build badges and then read them back
+    #[tokio::test]
+    async fn project_case_insensitivity() -> Result<()> {
+        let mut app = app(config(), pool().await?);
+
+        let creates = [
+            CreateBadge {
+                change_number: 1,
+                url: String::from("http://test.com"),
+                build_type: String::from("Editor"),
+                result: rugs::models::BadgeResult::Starting,
+                project: String::from("//depot/Stream/proj"),
+            },
+            CreateBadge {
+                change_number: 1,
+                url: String::from("http://test.com"),
+                build_type: String::from("Standalone"),
+                result: rugs::models::BadgeResult::Starting,
+                project: String::from("//depot/stream/Proj"),
+            },
+        ];
+
+        for create in creates {
+            let body = serde_json::to_vec(&create)?;
+
+            let response = app
+                .ready()
+                .await?
+                .call(
+                    request_builder("/api/build", "POST", Some(authorization_header(CI_AUTH)))
+                        .body(Body::from(body))?,
+                )
+                .await?;
+
+            assert_eq!(response.status(), StatusCode::OK);
+        }
+
+        let first_response = get_metadata(&mut app, "//depot/Stream", "proj").await?;
+        assert_eq!(first_response.items.len(), 1);
+        let cl1_item = &first_response.items[0];
+        assert_eq!(
+            cl1_item.badges.len(),
+            2,
+            "both badges should be under the same project"
+        );
+
+        let response = get_metadata(&mut app, "//depot/stream", "Proj").await?;
+        assert_eq!(
+            first_response.items, response.items,
+            "results should be identical even if we use a different case for project"
+        );
 
         Ok(())
     }
