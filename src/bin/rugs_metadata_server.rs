@@ -17,6 +17,7 @@ use tracing::error;
 use std::{fmt::Display, fs::File, io::BufReader, net::SocketAddr, path::Path, sync::Arc};
 
 use rugs::handlers::*;
+#[cfg(debug_assertions)]
 use rugs::middleware::print_request_response;
 
 /// A simple authenticated metadata server for UGS
