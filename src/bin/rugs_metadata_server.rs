@@ -175,7 +175,7 @@ mod tests {
         body::Body,
         http::{Request, StatusCode},
     };
-    use rugs::models::CreateBadge;
+    use rugs::models::{CreateBadge, GetMetadataListResponseV2};
     use tower::{Service, ServiceExt};
 
     const CI_AUTH: &str = "ci:ci";
@@ -415,10 +415,35 @@ mod tests {
         Ok(())
     }
 
+    async fn get_metadata(app: &mut Router) -> Result<GetMetadataListResponseV2> {
+        let response = app
+            .ready()
+            .await?
+            .call(
+                request_builder(
+                    "/api/metadata?stream=//depot/stream&project=proj&sequence=0&minchange=0",
+                    "GET",
+                    Some(authorization_header(USER_AUTH)),
+                )
+                .body(Body::empty())?,
+            )
+            .await?;
+        let status = response.status();
+        let body = hyper::body::to_bytes(response.into_body()).await?;
+        assert_eq!(status, StatusCode::OK, "body: {:?}", body);
+
+        let response = serde_json::from_slice::<GetMetadataListResponseV2>(&body)?;
+        Ok(response)
+    }
+
     /// Test that we can submit build badges and then read them back
     #[tokio::test]
     async fn metadata_integration() -> Result<()> {
         let mut app = app(config(), pool().await?);
+
+        let metadata = get_metadata(&mut app).await?;
+        assert_eq!(metadata.items.len(), 0);
+        let old_sequence_number = metadata.sequence_number;
 
         let creates = [
             CreateBadge {
@@ -442,6 +467,13 @@ mod tests {
                 result: rugs::models::BadgeResult::Success,
                 project: String::from("//depot/stream/proj"),
             },
+            CreateBadge {
+                change_number: 2,
+                url: String::from("http://test.com"),
+                build_type: String::from("Editor"),
+                result: rugs::models::BadgeResult::Starting,
+                project: String::from("//depot/stream/proj"),
+            },
         ];
 
         for create in creates {
@@ -459,23 +491,16 @@ mod tests {
             assert_eq!(response.status(), StatusCode::OK);
         }
 
-        let response = app
-            .ready()
-            .await?
-            .call(
-                request_builder(
-                    "/api/metadata?stream=//depot/stream&project=proj&sequence=0&minchange=0",
-                    "GET",
-                    Some(authorization_header(USER_AUTH)),
-                )
-                .body(Body::empty())?,
-            )
-            .await?;
-        let status = response.status();
-        let body = hyper::body::to_bytes(response.into_body()).await?;
-        assert_eq!(status, StatusCode::OK, "body: {:?}", body);
+        let response = get_metadata(&mut app).await?;
+        assert!(response.sequence_number > old_sequence_number);
+        assert_eq!(response.items.len(), 2);
+        let cl1_item = response.items.iter().find(|item| item.change == 1);
+        assert!(cl1_item.is_some());
+        assert_eq!(cl1_item.unwrap().badges.len(), 3);
 
-        // TODO: Deserialize and verify the response data
+        let cl2_item = response.items.iter().find(|item| item.change == 2);
+        assert!(cl2_item.is_some());
+        assert_eq!(cl2_item.unwrap().badges.len(), 1);
 
         Ok(())
     }
