@@ -17,6 +17,7 @@ use tracing::error;
 use std::{fmt::Display, fs::File, io::BufReader, net::SocketAddr, path::Path, sync::Arc};
 
 use rugs::handlers::*;
+use rugs::middleware::print_request_response;
 
 /// A simple authenticated metadata server for UGS
 #[derive(Parser, Debug)]
@@ -106,7 +107,7 @@ async fn main() -> Result<()> {
         .with_context(|| format!("Could not open database at {}", args.database))?;
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
-    tracing::debug!("listening on {}", addr);
+    tracing::info!("listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app(config, pool).into_make_service())
         .await?;
@@ -155,12 +156,15 @@ fn app(config: Config, pool: SqlitePool) -> Router {
 
     let metrics = Arc::new(Metrics::default());
 
-    app.layer(
-        ServiceBuilder::new()
-            .layer(TraceLayer::new_for_http())
-            .layer(Extension(pool))
-            .layer(Extension(metrics)),
-    )
+    let service_builder = ServiceBuilder::new()
+        .layer(TraceLayer::new_for_http())
+        .layer(Extension(pool))
+        .layer(Extension(metrics));
+
+    #[cfg(debug_assertions)]
+    let service_builder = service_builder.layer(middleware::from_fn(print_request_response));
+
+    app.layer(service_builder)
 }
 
 #[cfg(test)]
