@@ -14,7 +14,6 @@ use crate::{error::AppError, models::*};
 #[derive(Debug, Default)]
 pub struct Metrics {
     pub latest_requests: AtomicU32,
-    pub build_index_requests: AtomicU32,
     pub build_create_requests: AtomicU32,
     pub metadata_index_requests: AtomicU32,
 }
@@ -104,7 +103,7 @@ pub async fn metrics_index(Extension(metrics): Extension<Arc<Metrics>>) -> impl 
 
     Json(MetricsResponse {
         latest_requests: metrics.latest_requests.load(Ordering::Relaxed),
-        build_index_requests: metrics.build_index_requests.load(Ordering::Relaxed),
+        build_index_requests: 0,
         build_create_requests: metrics.build_create_requests.load(Ordering::Relaxed),
         metadata_index_requests: metrics.metadata_index_requests.load(Ordering::Relaxed),
     })
@@ -143,37 +142,6 @@ pub async fn latest_index(
         last_event_id: 0,
     };
     Ok((StatusCode::OK, Json(response)))
-}
-
-#[derive(Debug, Deserialize)]
-pub struct BadgesParams {
-    project: String,
-    lastbuildid: i64,
-}
-
-/// Handler for GET /build?project=foo&lastbuildid=42, returns a filtered list of badges (Use by v1 API clients)
-pub async fn build_index(
-    Extension(pool): Extension<SqlitePool>,
-    Extension(metrics): Extension<Arc<Metrics>>,
-    params: Query<BadgesParams>,
-) -> Result<impl IntoResponse, AppError> {
-    metrics.build_index_requests.fetch_add(1, Ordering::Relaxed);
-    let (stream, project) = split_project_path(&params.project).ok_or_else(|| {
-        anyhow!(
-            "Invalid project name format {}, should be Perforce stream path to directory",
-            params.project
-        )
-    })?;
-
-    let query = sqlx::query_as::<sqlx::Sqlite, Badge>(
-        "SELECT * FROM badges INNER JOIN projects USING(project_id) WHERE id > ? AND stream = ? AND project = ? ORDER BY id ASC"
-    );
-    let query = query.bind(params.lastbuildid).bind(stream).bind(project);
-    let badges = query.fetch_all(&pool).await?;
-
-    debug!("GET /build response: {:?}", badges);
-
-    Ok((StatusCode::OK, Json(badges)))
 }
 
 /// Handler for POST /api/build, creates a new badge with the given info

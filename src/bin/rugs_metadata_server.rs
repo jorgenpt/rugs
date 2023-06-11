@@ -119,7 +119,6 @@ fn app(config: Config, pool: SqlitePool) -> Router {
     // the UGS client).
     let user_routes = Router::new()
         .route("/latest", get(latest_index))
-        .route("/build", get(build_index))
         .route("/event", get(event_index))
         .route("/comment", get(comment_index))
         .route("/issues", get(issue_index))
