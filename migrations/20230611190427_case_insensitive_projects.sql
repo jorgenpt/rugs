@@ -1,0 +1,1 @@
+UPDATE projects SET stream = rtrim(lower(stream), '/'), project = lower(project);

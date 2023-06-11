@@ -31,7 +31,7 @@ fn find_starting_at(haystack: &str, needle: char, starting_index: usize) -> Opti
 }
 
 /// Take a //depot/stream/project path and try to split it into `//depot/stream` and `project`
-fn split_project_path(project_path: &str) -> Option<(&str, &str)> {
+fn split_project_path(project_path: &str) -> Option<(String, String)> {
     if !project_path.starts_with("//") {
         return None;
     }
@@ -40,8 +40,8 @@ fn split_project_path(project_path: &str) -> Option<(&str, &str)> {
         if let Some(project_index) = find_starting_at(project_path, '/', stream_name_index + 1) {
             if project_path.len() > project_index + 1 {
                 Some((
-                    &project_path[0..project_index],
-                    &project_path[project_index + 1..],
+                    normalize_stream(&project_path[0..project_index]),
+                    normalize_project_name(&project_path[project_index + 1..]),
                 ))
             } else {
                 error!(
@@ -63,11 +63,40 @@ fn split_project_path(project_path: &str) -> Option<(&str, &str)> {
     }
 }
 
+fn normalize_stream(stream: &str) -> String {
+    let stream = stream.strip_suffix('/').unwrap_or(stream);
+    stream.to_lowercase()
+}
+
+fn normalize_project_name(project_name: &str) -> String {
+    project_name.to_lowercase()
+}
+
+async fn get_project(
+    pool: &SqlitePool,
+    stream: &str,
+    project_name: &str,
+) -> Result<Option<i64>, AppError> {
+    let (stream, project_name) = (stream.to_lowercase(), project_name.to_lowercase());
+
+    let project_id = sqlx::query_scalar!(
+        "SELECT project_id FROM projects WHERE stream = ? AND project = ? LIMIT 1",
+        stream,
+        project_name
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(project_id)
+}
+
 async fn get_or_add_project(
     pool: &SqlitePool,
     stream: &str,
     project_name: &str,
 ) -> Result<i64, AppError> {
+    let (stream, project_name) = (stream.to_lowercase(), project_name.to_lowercase());
+
     let project_id = sqlx::query_scalar!(
         "SELECT project_id FROM projects WHERE stream = ? AND project = ? LIMIT 1",
         stream,
@@ -127,20 +156,15 @@ pub async fn latest_index(
 ) -> Result<impl IntoResponse, AppError> {
     metrics.latest_requests.fetch_add(1, Ordering::Relaxed);
 
-    let (stream, project) = split_project_path(&params.project).ok_or_else(|| {
+    let (stream, project_name) = split_project_path(&params.project).ok_or_else(|| {
         anyhow!(
             "Invalid project name format {}, should be Perforce stream path to directory",
             params.project
         )
     })?;
 
-    let project_id = sqlx::query_scalar!(
-        "SELECT project_id FROM projects WHERE stream = ? AND project = ? LIMIT 1",
-        stream,
-        project
-    )
-    .fetch_optional(&pool)
-    .await?;
+    let project_id = get_project(&pool, &stream, &project_name).await?;
+
     let (last_build_id, last_event_id) = if let Some(project_id) = project_id {
         let badge_sequence = sqlx::query_scalar!(
             "SELECT sequence FROM badges WHERE project_id = ? ORDER BY sequence DESC LIMIT 1",
@@ -190,7 +214,7 @@ pub async fn build_create(
     })?;
 
     debug!("POST /build request: {:?}", badge);
-    let project_id = get_or_add_project(&pool, stream, project).await?;
+    let project_id = get_or_add_project(&pool, &stream, &project).await?;
     let added_at = chrono::Utc::now();
     let sequence_number = added_at.timestamp_micros();
     let result = badge.result as u8;
@@ -252,6 +276,12 @@ pub async fn metadata_index(
         .metadata_index_requests
         .fetch_add(1, Ordering::Relaxed);
 
+    let stream = normalize_stream(&params.stream);
+    let project = params
+        .project
+        .to_owned()
+        .map(|p| normalize_project_name(&p));
+
     let project_query_string = format!(
         "SELECT project_id, project FROM projects WHERE stream = ? {}",
         params
@@ -268,8 +298,8 @@ pub async fn metadata_index(
     }
 
     let mut project_query =
-        sqlx::query_as::<sqlx::Sqlite, Project>(&project_query_string).bind(&params.stream);
-    if let Some(project) = &params.project {
+        sqlx::query_as::<sqlx::Sqlite, Project>(&project_query_string).bind(&stream);
+    if let Some(project) = project {
         project_query = project_query.bind(project);
     }
 
@@ -281,7 +311,7 @@ pub async fn metadata_index(
     };
 
     for project in projects {
-        let project_path = format!("{}/{}", params.stream, project.project);
+        let project_path = format!("{}/{}", stream, project.project);
 
         let mut filters = Vec::new();
         if params.sequence.is_some() {
@@ -416,8 +446,12 @@ pub async fn metadata_submit(
     let now = chrono::Utc::now();
     let sequence_number = now.timestamp_micros();
 
-    let project_name = params.project.clone().unwrap_or_default();
-    let project_id = get_or_add_project(&pool, &params.stream, &project_name).await?;
+    let stream = normalize_stream(&params.stream);
+    let project_name = params
+        .project
+        .map(|p| normalize_project_name(&p))
+        .unwrap_or_default();
+    let project_id = get_or_add_project(&pool, &stream, &project_name).await?;
     let existing_event_query_string =
         "SELECT * FROM user_events WHERE project_id = ? AND user_name = ? AND change_number = ?";
     let existing_event_query =
