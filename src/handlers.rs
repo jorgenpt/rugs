@@ -7,7 +7,7 @@ use tracing::{debug, error, info};
 use std::{
     collections::HashMap,
     sync::{
-        atomic::{AtomicU32, Ordering},
+        atomic::{AtomicU64, Ordering},
         Arc,
     },
 };
@@ -16,10 +16,10 @@ use crate::{error::AppError, models::*};
 
 #[derive(Debug, Default)]
 pub struct Metrics {
-    pub latest_requests: AtomicU32,
-    pub build_create_requests: AtomicU32,
-    pub metadata_index_requests: AtomicU32,
-    pub metadata_submit_requests: AtomicU32,
+    pub latest_requests: AtomicU64,
+    pub build_create_requests: AtomicU64,
+    pub metadata_index_requests: AtomicU64,
+    pub metadata_submit_requests: AtomicU64,
 }
 
 fn find_starting_at(haystack: &str, needle: char, starting_index: usize) -> Option<usize> {
@@ -99,10 +99,10 @@ async fn get_or_add_project(
 pub async fn metrics_index(Extension(metrics): Extension<Arc<Metrics>>) -> impl IntoResponse {
     #[derive(Serialize)]
     struct MetricsResponse {
-        pub latest_requests: u32,
-        pub build_index_requests: u32,
-        pub build_create_requests: u32,
-        pub metadata_index_requests: u32,
+        pub latest_requests: u64,
+        pub build_index_requests: u64,
+        pub build_create_requests: u64,
+        pub metadata_index_requests: u64,
     }
 
     Json(MetricsResponse {
