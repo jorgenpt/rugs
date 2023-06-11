@@ -45,8 +45,3 @@ To submit badges, you can:
 - Use the Teamcity plugin
   [teamcity-ugs-status-publisher](https://github.com/jorgenpt/teamcity-ugs-status-publisher)
   to post badges to `https://ci_auth_user:ci_auth_password@my.rugs.local`
-
-## Caveats
-
-Currently RUGS only support badges, it does not support reviews & build information from
-users. That'll come soon.
