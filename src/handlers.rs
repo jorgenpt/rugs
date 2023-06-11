@@ -68,7 +68,7 @@ async fn get_or_add_project(
     stream: &str,
     project_name: &str,
 ) -> Result<i64, AppError> {
-    let record = sqlx::query!(
+    let project_id = sqlx::query_scalar!(
         "SELECT project_id FROM projects WHERE stream = ? AND project = ? LIMIT 1",
         stream,
         project_name
@@ -76,8 +76,8 @@ async fn get_or_add_project(
     .fetch_optional(pool)
     .await?;
 
-    if let Some(record) = record {
-        Ok(record.project_id)
+    if let Some(project_id) = project_id {
+        Ok(project_id)
     } else {
         info!(
             "Creating new project for stream {}, project name {}",
@@ -134,18 +134,40 @@ pub async fn latest_index(
         )
     })?;
 
-    let row = sqlx::query!(
-        "SELECT sequence FROM badges INNER JOIN projects USING(project_id) WHERE stream = ? AND project = ? ORDER BY sequence DESC LIMIT 1",
-        stream, project
+    let project_id = sqlx::query_scalar!(
+        "SELECT project_id FROM projects WHERE stream = ? AND project = ? LIMIT 1",
+        stream,
+        project
     )
     .fetch_optional(&pool)
     .await?;
+    let (last_build_id, last_event_id) = if let Some(project_id) = project_id {
+        let badge_sequence = sqlx::query_scalar!(
+            "SELECT sequence FROM badges WHERE project_id = ? ORDER BY sequence DESC LIMIT 1",
+            project_id
+        )
+        .fetch_optional(&pool)
+        .await?;
+
+        let event_sequence = sqlx::query_scalar!(
+            "SELECT sequence FROM user_events WHERE project_id = ? ORDER BY sequence DESC LIMIT 1",
+            project_id
+        )
+        .fetch_optional(&pool)
+        .await?;
+        (
+            badge_sequence.unwrap_or_default(),
+            event_sequence.unwrap_or_default(),
+        )
+    } else {
+        (0, 0)
+    };
 
     let response = LatestResponseV1 {
         version: Some(2),
-        last_build_id: row.map_or(0, |row| row.sequence.unwrap_or_default()),
+        last_build_id,
         last_comment_id: 0,
-        last_event_id: 0,
+        last_event_id,
     };
     Ok((StatusCode::OK, Json(response)))
 }

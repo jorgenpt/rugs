@@ -10,7 +10,7 @@
     },
     "query": "INSERT INTO projects (stream, project) VALUES (?, ?)"
   },
-  "666566ffeae4dd11578765aafbda66331b64dbf23cfe0f92bfde2dd6d62056dd": {
+  "1e78779d34f558b44273633174911f72f130472a4fe0c2c1da9b1c12303c0867": {
     "describe": {
       "columns": [
         {
@@ -20,13 +20,13 @@
         }
       ],
       "nullable": [
-        true
+        false
       ],
       "parameters": {
-        "Right": 2
+        "Right": 1
       }
     },
-    "query": "SELECT sequence FROM badges INNER JOIN projects USING(project_id) WHERE stream = ? AND project = ? ORDER BY sequence DESC LIMIT 1"
+    "query": "SELECT sequence FROM badges WHERE project_id = ? ORDER BY sequence DESC LIMIT 1"
   },
   "67fa42b277f1ca5214cb3737a58f22f403f4902a934e8b9abc81baa2a25b13a8": {
     "describe": {
@@ -45,6 +45,24 @@
       }
     },
     "query": "SELECT project_id FROM projects WHERE stream = ? AND project = ? LIMIT 1"
+  },
+  "d49ae22882383ff5fddc27bd9d015e83d4fcf2c177273500261467a645dd6bff": {
+    "describe": {
+      "columns": [
+        {
+          "name": "sequence",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT sequence FROM user_events WHERE project_id = ? ORDER BY sequence DESC LIMIT 1"
   },
   "f3e070b134ccb4d1ca5fe648abfbf38602f1a3c9f128379f419aef7d367af836": {
     "describe": {
