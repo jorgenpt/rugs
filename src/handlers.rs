@@ -103,6 +103,7 @@ pub async fn metrics_index(Extension(metrics): Extension<Arc<Metrics>>) -> impl 
         pub build_index_requests: u64,
         pub build_create_requests: u64,
         pub metadata_index_requests: u64,
+        pub metadata_submit_requests: u64,
     }
 
     Json(MetricsResponse {
@@ -110,6 +111,7 @@ pub async fn metrics_index(Extension(metrics): Extension<Arc<Metrics>>) -> impl 
         build_index_requests: 0,
         build_create_requests: metrics.build_create_requests.load(Ordering::Relaxed),
         metadata_index_requests: metrics.metadata_index_requests.load(Ordering::Relaxed),
+        metadata_submit_requests: metrics.metadata_submit_requests.load(Ordering::Relaxed),
     })
 }
 
