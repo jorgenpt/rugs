@@ -10,6 +10,24 @@
     },
     "query": "INSERT INTO projects (stream, project) VALUES (?, ?)"
   },
+  "666566ffeae4dd11578765aafbda66331b64dbf23cfe0f92bfde2dd6d62056dd": {
+    "describe": {
+      "columns": [
+        {
+          "name": "sequence",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        true
+      ],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "SELECT sequence FROM badges INNER JOIN projects USING(project_id) WHERE stream = ? AND project = ? ORDER BY sequence DESC LIMIT 1"
+  },
   "67fa42b277f1ca5214cb3737a58f22f403f4902a934e8b9abc81baa2a25b13a8": {
     "describe": {
       "columns": [
@@ -28,32 +46,14 @@
     },
     "query": "SELECT project_id FROM projects WHERE stream = ? AND project = ? LIMIT 1"
   },
-  "9f68804cc09c1fdabc3d6a85d9bea778fa184456af9e9a203bd5fd577e947943": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id",
-          "ordinal": 0,
-          "type_info": "Int64"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Right": 2
-      }
-    },
-    "query": "SELECT id FROM badges INNER JOIN projects USING(project_id) WHERE stream = ? AND project = ? ORDER BY id DESC LIMIT 1"
-  },
-  "a57cb5661634400029531218e5917da7b2699816e68b5231a49550d8ba5ff586": {
+  "f661ddadf402f7ea698419ecb6dc87698d8c84999e3857b89923cab78027c3c4": {
     "describe": {
       "columns": [],
       "nullable": [],
       "parameters": {
-        "Right": 6
+        "Right": 7
       }
     },
-    "query": "INSERT INTO badges (change_number, added_at, build_type, result, url, project_id) VALUES (?, ?, ?, ?, ?, ?)"
+    "query": "INSERT INTO badges (sequence, change_number, added_at, build_type, result, url, project_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
   }
 }

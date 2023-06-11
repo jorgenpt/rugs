@@ -36,7 +36,7 @@ pub enum BadgeResult {
 #[derive(Clone, Debug, Serialize, Deserialize, sqlx::FromRow)]
 #[serde(rename_all = "PascalCase")]
 pub struct Badge {
-    pub id: i64,
+    pub sequence: i64,
     pub change_number: i64,
     pub added_at: DateTime<Utc>,
     pub build_type: String,

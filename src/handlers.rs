@@ -129,7 +129,7 @@ pub async fn latest_index(
     })?;
 
     let row = sqlx::query!(
-        "SELECT id FROM badges INNER JOIN projects USING(project_id) WHERE stream = ? AND project = ? ORDER BY id DESC LIMIT 1",
+        "SELECT sequence FROM badges INNER JOIN projects USING(project_id) WHERE stream = ? AND project = ? ORDER BY sequence DESC LIMIT 1",
         stream, project
     )
     .fetch_optional(&pool)
@@ -137,7 +137,7 @@ pub async fn latest_index(
 
     let response = LatestResponseV1 {
         version: Some(2),
-        last_build_id: row.map_or(0, |row| row.id),
+        last_build_id: row.map_or(0, |row| row.sequence.unwrap_or_default()),
         last_comment_id: 0,
         last_event_id: 0,
     };
@@ -164,9 +164,11 @@ pub async fn build_create(
     debug!("POST /build request: {:?}", badge);
     let project_id = get_or_add_project(&pool, stream, project).await?;
     let added_at = chrono::Utc::now();
+    let sequence_number = added_at.timestamp_micros();
     let result = badge.result as u8;
     let query = sqlx::query!(
-        "INSERT INTO badges (change_number, added_at, build_type, result, url, project_id) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO badges (sequence, change_number, added_at, build_type, result, url, project_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        sequence_number,
         badge.change_number,
         added_at,
         badge.build_type,
@@ -232,7 +234,7 @@ pub async fn metadata_index(
 
     let mut filters = Vec::new();
     if params.sequence.is_some() {
-        filters.push("id > ?");
+        filters.push("sequence > ?");
     }
 
     filters.push("change_number >= ?");
@@ -274,11 +276,11 @@ pub async fn metadata_index(
     };
 
     for changelist in changelists {
-        // We intentionally order these by id (from old to new). We don't send the ID, so to manage newness the order here matters.
+        // We intentionally order these by sequence (from old to new). We don't send the ID, so to manage newness the order here matters.
         // (We could also only send the most recent badge for each (change_number, build_result) pair, but the client will take care
         // of figuring out which the most recent is if we order them right.)
         let mut query = sqlx::query_as::<sqlx::Sqlite, Badge>(
-            "SELECT * FROM badges WHERE change_number = ? AND project_id = ? ORDER BY id ASC",
+            "SELECT * FROM badges WHERE change_number = ? AND project_id = ? ORDER BY sequence ASC",
         );
 
         query = query.bind(changelist.change_number);
@@ -288,7 +290,7 @@ pub async fn metadata_index(
 
         response.sequence_number = response
             .sequence_number
-            .max(badges.iter().map(|b| b.id).max().unwrap_or(0));
+            .max(badges.iter().map(|b| b.sequence).max().unwrap_or(0));
 
         response.items.push(GetMetadataResponseV2 {
             project: format!("{}/{}", changelist.stream, changelist.project),
