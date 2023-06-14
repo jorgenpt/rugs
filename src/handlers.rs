@@ -340,9 +340,9 @@ pub async fn metadata_index(
             "SELECT * FROM badges WHERE project_id = ? AND {} ORDER BY sequence ASC",
             filters.join(" AND "),
         );
-        let mut badge_query = sqlx::query_as::<sqlx::Sqlite, Badge>(&badge_query_string);
+        let mut badge_query =
+            sqlx::query_as::<sqlx::Sqlite, Badge>(&badge_query_string).bind(project.project_id);
 
-        badge_query = badge_query.bind(project.project_id);
         if let Some(sequence) = params.sequence {
             badge_query = badge_query.bind(sequence);
         }
@@ -383,9 +383,9 @@ pub async fn metadata_index(
             filters.join(" AND "),
         );
         let mut user_event_query =
-            sqlx::query_as::<sqlx::Sqlite, UserEvent>(&user_event_query_string);
+            sqlx::query_as::<sqlx::Sqlite, UserEvent>(&user_event_query_string)
+                .bind(project.project_id);
 
-        user_event_query = user_event_query.bind(project.project_id);
         if let Some(sequence) = params.sequence {
             user_event_query = user_event_query.bind(sequence);
         }
