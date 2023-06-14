@@ -1,16 +1,14 @@
 use anyhow::anyhow;
 use axum::{extract::Query, http::StatusCode, response::IntoResponse, Extension, Json};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info};
 
-use std::{
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
 };
 
 use crate::{error::AppError, models::*};
@@ -323,107 +321,77 @@ pub async fn metadata_index(
     for project in projects {
         let project_path = format!("{}/{}", stream, project.project);
 
-        let mut filters = Vec::new();
-        if params.sequence.is_some() {
-            filters.push("sequence > ?");
-        }
-
-        filters.push("change_number >= ?");
+        let mut filters = vec!["sequence > ?", "change_number >= ?"];
         if params.maxchange.is_some() {
             filters.push("change_number <= ?")
         }
 
-        // We intentionally order these by sequence (from old to new). We don't send the ID, so to manage newness the order here matters.
-        // (We could also only send the most recent badge for each (change_number, build_result) pair, but the client will take care
-        // of figuring out which the most recent is if we order them right.)
-        let badge_query_string = format!(
-            "SELECT * FROM badges WHERE project_id = ? AND {} ORDER BY sequence ASC",
-            filters.join(" AND "),
-        );
-        let mut badge_query =
-            sqlx::query_as::<sqlx::Sqlite, Badge>(&badge_query_string).bind(project.project_id);
+        let mut changelists = Vec::<i64>::new();
+        for table in &["badges", "user_events"] {
+            let changelist_query_string = format!(
+                "SELECT DISTINCT change_number FROM {table} WHERE project_id = ? AND {}",
+                filters.join(" AND "),
+            );
 
-        if let Some(sequence) = params.sequence {
-            badge_query = badge_query.bind(sequence);
+            let mut changelist_query =
+                sqlx::query_scalar::<sqlx::Sqlite, i64>(&changelist_query_string)
+                    .bind(project.project_id);
+
+            changelist_query = changelist_query.bind(params.sequence.unwrap_or(0));
+            changelist_query = changelist_query.bind(params.minchange);
+            if let Some(maxchange) = params.maxchange {
+                changelist_query = changelist_query.bind(maxchange);
+            }
+            changelists.extend(changelist_query.fetch_all(&pool).await?);
         }
+        changelists.sort_unstable();
 
-        badge_query = badge_query.bind(params.minchange);
-        if let Some(maxchange) = params.maxchange {
-            badge_query = badge_query.bind(maxchange);
-        }
+        for changelist in changelists.into_iter().unique() {
+            // We intentionally order these by sequence (from old to new). We don't send the ID, so to manage newness the order here matters.
+            // (We could also only send the most recent badge for each (change_number, build_result) pair, but the client will take care
+            // of figuring out which the most recent is if we order them right.)
+            let badge_query =
+                sqlx::query_as::<sqlx::Sqlite, Badge>("SELECT * FROM badges WHERE project_id = ? AND change_number = ? ORDER BY sequence ASC").bind(project.project_id).bind(changelist);
+            let badges = badge_query.fetch_all(&pool).await?;
+            response.sequence_number = response
+                .sequence_number
+                .max(badges.iter().map(|b| b.sequence).max().unwrap_or_default());
 
-        let badges = badge_query.fetch_all(&pool).await?;
+            let user_event_query = sqlx::query_as::<sqlx::Sqlite, UserEvent>("SELECT * FROM user_events WHERE project_id = ? AND change_number = ? ORDER BY sequence ASC").bind(project.project_id).bind(changelist);
+            let user_events = user_event_query.fetch_all(&pool).await?;
+            response.sequence_number = response.sequence_number.max(
+                user_events
+                    .iter()
+                    .map(|u| u.sequence)
+                    .max()
+                    .unwrap_or_default(),
+            );
 
-        let mut changelists = HashMap::<i64, GetMetadataResponseV2>::new();
-
-        for badge in badges {
-            response.sequence_number = response.sequence_number.max(badge.sequence);
-
-            let cl_badges =
-                changelists
-                    .entry(badge.change_number)
-                    .or_insert_with(|| GetMetadataResponseV2 {
-                        project: project_path.to_owned(),
-                        change: badge.change_number,
-                        users: Vec::new(),
-                        badges: Vec::new(),
-                    });
-            cl_badges.badges.push(GetBadgeDataResponseV2 {
+            let badge_responses = badges.into_iter().map(|badge| GetBadgeDataResponseV2 {
                 name: badge.build_type,
                 url: badge.url,
                 state: badge.result,
             });
-        }
-
-        // We intentionally order these by sequence (from old to new). We don't send the ID, so to manage newness the order here matters.
-        // (We could also only send the most recent badge for each (change_number, build_result) pair, but the client will take care
-        // of figuring out which the most recent is if we order them right.)
-        let user_event_query_string = format!(
-            "SELECT * FROM user_events WHERE project_id = ? AND {} ORDER BY sequence ASC",
-            filters.join(" AND "),
-        );
-        let mut user_event_query =
-            sqlx::query_as::<sqlx::Sqlite, UserEvent>(&user_event_query_string)
-                .bind(project.project_id);
-
-        if let Some(sequence) = params.sequence {
-            user_event_query = user_event_query.bind(sequence);
-        }
-
-        user_event_query = user_event_query.bind(params.minchange);
-        if let Some(maxchange) = params.maxchange {
-            user_event_query = user_event_query.bind(maxchange);
-        }
-
-        let user_events = user_event_query.fetch_all(&pool).await?;
-
-        for user_event in user_events {
-            response.sequence_number = response.sequence_number.max(user_event.sequence);
-
-            let cl_badges = changelists
-                .entry(user_event.change_number)
-                .or_insert_with(|| GetMetadataResponseV2 {
-                    project: project_path.to_owned(),
-                    change: user_event.change_number,
-                    users: Vec::new(),
-                    badges: Vec::new(),
+            let user_responses = user_events
+                .into_iter()
+                .map(|user_event| GetUserDataResponseV2 {
+                    user: user_event.user_name,
+                    sync_time: user_event.synced_at.map(|t| t.timestamp_micros() * 10),
+                    vote: user_event.vote,
+                    comment: user_event.comment,
+                    investigating: user_event.investigating,
+                    starred: user_event.starred,
                 });
 
-            cl_badges.users.push(GetUserDataResponseV2 {
-                user: user_event.user_name,
-                sync_time: user_event.synced_at.map(|t| t.timestamp_micros() * 10),
-                vote: user_event.vote,
-                comment: user_event.comment,
-                investigating: user_event.investigating,
-                starred: user_event.starred,
+            response.items.push(GetMetadataResponseV2 {
+                project: project_path.to_owned(),
+                change: changelist,
+                users: user_responses.collect(),
+                badges: badge_responses.collect(),
             });
         }
-
-        response.items.extend(changelists.into_values().into_iter());
     }
 
-    // Sort by change so they are processed in the expected order
-    response.items.sort_unstable_by_key(|k| k.change);
     debug!("GET /metadata response: {:?}", response);
 
     Ok(Json(response))
