@@ -419,10 +419,11 @@ pub async fn metadata_index(
             });
         }
 
-        // Doesn't look like ordering should matter, so don't bother sorting or anything
         response.items.extend(changelists.into_values().into_iter());
     }
 
+    // Sort by change so they are processed in the expected order
+    response.items.sort_unstable_by_key(|k| k.change);
     debug!("GET /metadata response: {:?}", response);
 
     Ok(Json(response))
