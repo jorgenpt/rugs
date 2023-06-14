@@ -2,6 +2,7 @@ use anyhow::anyhow;
 use axum::{extract::Query, http::StatusCode, response::IntoResponse, Extension, Json};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
+use tokio::sync::RwLock;
 use tracing::{debug, error, info};
 
 use std::{
@@ -152,6 +153,7 @@ pub struct LatestParams {
 pub async fn latest_index(
     Extension(pool): Extension<SqlitePool>,
     Extension(metrics): Extension<Arc<Metrics>>,
+    Extension(sequence_lock): Extension<Arc<RwLock<()>>>,
     params: Query<LatestParams>,
 ) -> Result<impl IntoResponse, AppError> {
     metrics.latest_requests.fetch_add(1, Ordering::Relaxed);
@@ -164,6 +166,8 @@ pub async fn latest_index(
     })?;
 
     let project_id = get_project(&pool, &stream, &project_name).await?;
+
+    let _read_lock = sequence_lock.read().await;
 
     let (last_build_id, last_event_id) = if let Some(project_id) = project_id {
         let badge_sequence = sqlx::query_scalar!(
@@ -200,6 +204,7 @@ pub async fn latest_index(
 pub async fn build_create(
     Extension(pool): Extension<SqlitePool>,
     Extension(metrics): Extension<Arc<Metrics>>,
+    Extension(sequence_lock): Extension<Arc<RwLock<()>>>,
     Json(badge): Json<CreateBadge>,
 ) -> Result<impl IntoResponse, AppError> {
     metrics
@@ -214,6 +219,8 @@ pub async fn build_create(
     })?;
 
     debug!("POST /build request: {:?}", badge);
+    let _write_lock = sequence_lock.write().await;
+
     let project_id = get_or_add_project(&pool, &stream, &project).await?;
     let added_at = chrono::Utc::now();
     let sequence_number = added_at.timestamp_micros();
@@ -270,6 +277,7 @@ pub struct MetadataIndexParams {
 pub async fn metadata_index(
     Extension(pool): Extension<SqlitePool>,
     Extension(metrics): Extension<Arc<Metrics>>,
+    Extension(sequence_lock): Extension<Arc<RwLock<()>>>,
     params: Query<MetadataIndexParams>,
 ) -> Result<impl IntoResponse, AppError> {
     metrics
@@ -309,6 +317,8 @@ pub async fn metadata_index(
         sequence_number: 0,
         items: Vec::new(),
     };
+
+    let _read_lock = sequence_lock.read().await;
 
     for project in projects {
         let project_path = format!("{}/{}", stream, project.project);
@@ -437,12 +447,14 @@ pub struct UpdateMetadataRequestV2 {
 pub async fn metadata_submit(
     Extension(pool): Extension<SqlitePool>,
     Extension(metrics): Extension<Arc<Metrics>>,
+    Extension(sequence_lock): Extension<Arc<RwLock<()>>>,
     Json(params): Json<UpdateMetadataRequestV2>,
 ) -> Result<impl IntoResponse, AppError> {
     metrics
         .metadata_submit_requests
         .fetch_add(1, Ordering::Relaxed);
 
+    let _write_lock = sequence_lock.write().await;
     let now = chrono::Utc::now();
     let sequence_number = now.timestamp_micros();
 

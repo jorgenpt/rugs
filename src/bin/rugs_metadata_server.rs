@@ -10,6 +10,7 @@ use base64::prelude::*;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
+use tokio::sync::RwLock;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use tracing::error;
@@ -155,10 +156,12 @@ fn app(config: Config, pool: SqlitePool) -> Router {
         app
     };
 
+    let sequence_lock = Arc::new(RwLock::new(()));
     let metrics = Arc::new(Metrics::default());
 
     let service_builder = ServiceBuilder::new()
         .layer(TraceLayer::new_for_http())
+        .layer(Extension(sequence_lock))
         .layer(Extension(pool))
         .layer(Extension(metrics));
 
