@@ -6,7 +6,7 @@ internet.
 
 ## Setup
 
-1. Copy `config.json.dist` to `config.json` and put a randomly generated token
+1. Copy `config.yaml.dist` to `config.yaml` and put a randomly generated token
    into `ci_auth` and `user_auth`
    - `ci_auth` is used to post new badges for UGS
    - `user_auth` is used by UGS to read badges and leave user feedback

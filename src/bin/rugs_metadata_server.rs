@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use axum::{
     http::{self, Request, StatusCode},
     middleware::{self, Next},
@@ -13,9 +13,9 @@ use sqlx::SqlitePool;
 use tokio::sync::RwLock;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
-use tracing::error;
+use tracing::{error, info};
 
-use std::{fmt::Display, fs::File, io::BufReader, net::SocketAddr, path::Path, sync::Arc};
+use std::{fs::File, io::BufReader, net::SocketAddr, sync::Arc};
 
 use rugs::handlers::*;
 #[cfg(debug_assertions)]
@@ -25,9 +25,9 @@ use rugs::middleware::print_request_response;
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    /// Config file to load settings from
-    #[clap(long, default_value = "config.json")]
-    config: String,
+    /// Config file to load settings from, in YAML
+    #[clap(long)]
+    config: Option<String>,
 
     /// Path to the sqlite database to use for persistence (you can
     /// use `:memory:` to not persist))
@@ -58,13 +58,19 @@ struct Config {
     pub request_root: String,
 }
 
-/// Parse a `Config` from JSON at the given path
-fn read_config_from_file<P: AsRef<Path> + Display>(path: P) -> Result<Config> {
-    let file = File::open(&path).with_context(|| format!("Failed to read config from {}", path))?;
+/// Parse a `Config` from YAML at the given path
+fn read_yaml_config_from_handle(file: File) -> Result<Config> {
     let reader = BufReader::new(file);
 
-    let config = serde_json::from_reader(reader)
-        .with_context(|| format!("Failed to parse config in {}", path))?;
+    let config = serde_yaml::from_reader(reader)?;
+    Ok(config)
+}
+
+/// Parse a `Config` from JSON at the given path
+fn read_json_config_from_handle(file: File) -> Result<Config> {
+    let reader = BufReader::new(file);
+
+    let config = serde_json::from_reader(reader)?;
     Ok(config)
 }
 
@@ -109,7 +115,31 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
 
-    let config = read_config_from_file(args.config)?;
+    let config = if let Some(config) = args.config {
+        info!("loading configuration from {config}");
+        let file =
+            File::open(&config).with_context(|| format!("Failed to open config in {}", config))?;
+        read_yaml_config_from_handle(file)
+            .with_context(|| format!("Failed to parse config in {}", config))?
+    } else {
+        // Default to config.yaml, which is the new format
+        let file = File::open("config.yaml");
+        if let Ok(file) = file {
+            info!("loading configuration from config.yaml");
+            read_yaml_config_from_handle(file)
+                .with_context(|| "Failed to parse config in config.yaml")?
+        } else {
+            // Fall back to trying to read config.json, which was the old default
+            let file = File::open("config.json");
+            if let Ok(file) = file {
+                info!("loading configuration from config.json");
+                read_json_config_from_handle(file)
+                    .with_context(|| "Failed to parse config in config.json")?
+            } else {
+                bail!("No --config specified, and could not find config.yaml or config.json");
+            }
+        }
+    };
 
     let pool = SqlitePool::connect(&format!("sqlite:{}", args.database))
         .await

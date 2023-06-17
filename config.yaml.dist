@@ -1,0 +1,4 @@
+user_auth: "arbitrary:user_pass_for_UnrealGameSync.ini"
+ci_auth: "another_arbitrary:user_pass_for_PostBadgeStatus.exe"
+http_port: 3000
+request_root: /
