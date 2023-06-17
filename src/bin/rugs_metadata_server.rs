@@ -35,6 +35,10 @@ struct Args {
     database: String,
 }
 
+fn default_http_root() -> u16 {
+    3000
+}
+
 fn default_request_root() -> String {
     "/".to_owned()
 }
@@ -46,6 +50,9 @@ struct Config {
     pub user_auth: String,
     /// The auth token required for CI-facing operations (writing badges)
     pub ci_auth: String,
+    /// The port we listen to for incoming HTTP connections
+    #[serde(default = "default_http_root")]
+    pub http_port: u16,
     /// The prefix we expect for any request (e.g. "/ugs" means we look for "/ugs/api/build")
     #[serde(default = "default_request_root")]
     pub request_root: String,
@@ -108,7 +115,7 @@ async fn main() -> Result<()> {
         .await
         .with_context(|| format!("Could not open database at {}", args.database))?;
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+    let addr = SocketAddr::from(([0, 0, 0, 0], config.http_port));
     tracing::info!("listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app(config, pool).into_make_service())
@@ -188,6 +195,7 @@ mod tests {
         Config {
             user_auth: USER_AUTH.to_string(),
             ci_auth: CI_AUTH.to_string(),
+            http_port: 3000,
             request_root: "/".to_string(),
         }
     }
