@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO badges (sequence, change_number, added_at, build_type, result, url, project_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "f661ddadf402f7ea698419ecb6dc87698d8c84999e3857b89923cab78027c3c4"
+}

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT sequence FROM badges WHERE project_id = ? ORDER BY sequence DESC LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "name": "sequence",
+        "ordinal": 0,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1e78779d34f558b44273633174911f72f130472a4fe0c2c1da9b1c12303c0867"
+}

@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use axum::{
     http::{self, Request, StatusCode},
     middleware::{self, Next},

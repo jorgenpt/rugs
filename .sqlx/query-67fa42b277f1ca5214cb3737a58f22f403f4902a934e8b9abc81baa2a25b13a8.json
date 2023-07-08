@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT project_id FROM projects WHERE stream = ? AND project = ? LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "name": "project_id",
+        "ordinal": 0,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "67fa42b277f1ca5214cb3737a58f22f403f4902a934e8b9abc81baa2a25b13a8"
+}

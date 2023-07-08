@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE user_events SET sequence = ?, updated_at = ?, synced_at = ?, vote = ?, investigating = ?, starred = ?, comment = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": []
+  },
+  "hash": "f3e070b134ccb4d1ca5fe648abfbf38602f1a3c9f128379f419aef7d367af836"
+}

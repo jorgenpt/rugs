@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO user_events (project_id, change_number, user_name, sequence, updated_at, synced_at, vote, investigating, starred, comment) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 10
+    },
+    "nullable": []
+  },
+  "hash": "f69bfcdca1c2ce7ae04bc343f41c9898fa8565f4436c8aa24524f7a2e5850def"
+}

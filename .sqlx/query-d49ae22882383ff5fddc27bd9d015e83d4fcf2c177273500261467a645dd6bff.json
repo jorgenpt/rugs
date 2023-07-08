@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT sequence FROM user_events WHERE project_id = ? ORDER BY sequence DESC LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "name": "sequence",
+        "ordinal": 0,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d49ae22882383ff5fddc27bd9d015e83d4fcf2c177273500261467a645dd6bff"
+}

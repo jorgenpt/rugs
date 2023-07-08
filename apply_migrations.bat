@@ -1,4 +1,4 @@
-cargo install sqlx-cli
+cargo install --no-default-features --features sqlite sqlx-cli@^0.7
 @if %errorlevel% neq 0 exit /b %errorlevel%
 
 set DATABASE_URL=sqlite:metadata.db 
