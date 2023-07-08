@@ -51,3 +51,10 @@ To submit badges, you can do one of the following:
 - Use the Teamcity plugin
   [teamcity-ugs-status-publisher](https://github.com/jorgenpt/teamcity-ugs-status-publisher)
   to post badges to `https://ci_auth_user:ci_auth_password@my.rugs.local`
+
+## License
+
+This work is dual-licensed under Apache 2.0 and MIT.
+You can choose between one of them if you use this work.
+
+`SPDX-License-Identifier: MIT OR Apache-2.0`
