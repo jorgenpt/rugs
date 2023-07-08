@@ -8,14 +8,13 @@ use axum::{
 };
 use base64::prelude::*;
 use clap::Parser;
-use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tokio::sync::RwLock;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
-use tracing::{error, info};
+use tracing::error;
 
-use std::{fs::File, io::BufReader, net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 
 use rugs::handlers::*;
 #[cfg(debug_assertions)]
@@ -25,53 +24,44 @@ use rugs::middleware::print_request_response;
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    /// Config file to load settings from, in YAML
-    #[clap(long)]
-    config: Option<String>,
-
     /// Path to the sqlite database to use for persistence (you can
     /// use `:memory:` to not persist))
     #[clap(long, default_value = "metadata.db")]
     database: String,
 }
 
-fn default_http_root() -> u16 {
-    3000
-}
-
-fn default_request_root() -> String {
-    "/".to_owned()
-}
-
-/// Configuration loaded from disk
-#[derive(Clone, Debug, Serialize, Deserialize)]
+/// Configuration for the app
+#[derive(Clone, Debug)]
 struct Config {
     /// The auth token required for user-facing operations (reading badges, leaving comments & feedback)
     pub user_auth: String,
     /// The auth token required for CI-facing operations (writing badges)
     pub ci_auth: String,
     /// The port we listen to for incoming HTTP connections
-    #[serde(default = "default_http_root")]
     pub http_port: u16,
     /// The prefix we expect for any request (e.g. "/ugs" means we look for "/ugs/api/build")
-    #[serde(default = "default_request_root")]
     pub request_root: String,
 }
 
-/// Parse a `Config` from YAML at the given path
-fn read_yaml_config_from_handle(file: File) -> Result<Config> {
-    let reader = BufReader::new(file);
+impl Config {
+    /// Construct a config from environment variables or sensible defaults
+    fn from_env() -> Self {
+        let user_auth = std::env::var("RUGS_USER_AUTH").ok();
 
-    let config = serde_yaml::from_reader(reader)?;
-    Ok(config)
-}
+        let ci_auth = std::env::var("RUGS_CI_AUTH").ok();
 
-/// Parse a `Config` from JSON at the given path
-fn read_json_config_from_handle(file: File) -> Result<Config> {
-    let reader = BufReader::new(file);
+        let http_port = std::env::var("RUGS_PORT")
+            .ok()
+            .and_then(|port| port.parse::<u16>().ok());
+        let request_root = std::env::var("RUGS_WEB_ROOT").ok();
 
-    let config = serde_json::from_reader(reader)?;
-    Ok(config)
+        Self {
+            user_auth: user_auth.unwrap_or_default(),
+            ci_auth: ci_auth.unwrap_or_default(),
+            http_port: http_port.unwrap_or(3000),
+            request_root: request_root.unwrap_or_else(|| String::from("/")),
+        }
+    }
 }
 
 /// Require a Basic Auth header that matches `required_auth`, or deny the request. If `required_auth`
@@ -113,33 +103,8 @@ pub async fn health() {}
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
+    let config = Config::from_env();
     let args = Args::parse();
-
-    let config = if let Some(config) = args.config {
-        info!("loading configuration from {config}");
-        let file =
-            File::open(&config).with_context(|| format!("Failed to open config in {}", config))?;
-        read_yaml_config_from_handle(file)
-            .with_context(|| format!("Failed to parse config in {}", config))?
-    } else {
-        // Default to config.yaml, which is the new format
-        let file = File::open("config.yaml");
-        if let Ok(file) = file {
-            info!("loading configuration from config.yaml");
-            read_yaml_config_from_handle(file)
-                .with_context(|| "Failed to parse config in config.yaml")?
-        } else {
-            // Fall back to trying to read config.json, which was the old default
-            let file = File::open("config.json");
-            if let Ok(file) = file {
-                info!("loading configuration from config.json");
-                read_json_config_from_handle(file)
-                    .with_context(|| "Failed to parse config in config.json")?
-            } else {
-                bail!("No --config specified, and could not find config.yaml or config.json");
-            }
-        }
-    };
 
     let pool = SqlitePool::connect(&format!("sqlite:{}", args.database))
         .await

@@ -18,7 +18,6 @@ num-derive = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_repr = "0.1.8"
-serde_yaml = "0.9"
 sqlx = { version = "0.6", features = ["chrono", "offline", "runtime-tokio-native-tls", "sqlite"] }
 tokio = { version = "1.0", features = ["full"] }
 tower = { version = "0.4.13" }
