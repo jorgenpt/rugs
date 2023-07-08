@@ -11,13 +11,16 @@ axum = "0.6.18"
 base64 = "0.21.2"
 chrono = { version = "0.4.19", features = ["serde"] }
 clap = { version = "4.3.2", features = ["derive"] }
+futures = "0.3.28"
 hyper = "0.14.18"
 itertools = "0.10.5"
-num-traits = "0.2"
 num-derive = "0.3"
+num-traits = "0.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_repr = "0.1.8"
+signal-hook = "0.3.15"
+signal-hook-tokio = { version = "0.3.1", features = ["futures-v0_3"] }
 sqlx = { version = "0.7", features = ["chrono", "runtime-tokio", "sqlite"] }
 tokio = { version = "1.0", features = ["full"] }
 tower = { version = "0.4.13" }
