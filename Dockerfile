@@ -2,10 +2,8 @@
 # Rust cross-compilation is much faster than emulating a Docker container
 FROM --platform=$BUILDPLATFORM rust:1.70 as builder
 
-ARG BUILDOS
-ARG BUILDARCH
-ARG TARGETOS
-ARG TARGETARCH
+ARG BUILDPLATFORM
+ARG TARGETPLATFORM
 
 # Make sure we don't try to access the database during build
 ENV SQLX_OFFLINE=true
@@ -13,8 +11,8 @@ WORKDIR /build
 
 # Make sure we've configured rustc & cargo for the correct target, and installed any other
 # dependencies.
-COPY ./docker/setup_rust_cross_compile.sh setup_rust_cross_compile.sh
-RUN ./setup_rust_cross_compile.sh ${BUILDOS} ${BUILDARCH} ${TARGETOS} ${TARGETARCH}
+COPY ./docker/cross_build_setup/${BUILDPLATFORM}/${TARGETPLATFORM}.sh cross_build_setup.sh
+RUN ./cross_build_setup.sh
 
 # Create a layer with just the sqlx-cli
 RUN cargo install --no-default-features --features sqlite sqlx-cli@^0.7
@@ -48,7 +46,7 @@ VOLUME ["/data"]
 
 # Then create layers that depends on the build output
 COPY --from=builder /usr/local/cargo/bin/sqlx sqlx
-COPY --from=builder /build/target/current_target/release/rugs_metadata_server rugs_metadata_server
+COPY --from=builder /build/current_target/release/rugs_metadata_server rugs_metadata_server
 
 ENV RUST_LOG=info
 ENTRYPOINT ["/app/migrate_and_run.sh", "/data/metadata.db"]
