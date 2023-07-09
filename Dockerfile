@@ -32,16 +32,15 @@ RUN mkdir -p data
 
 FROM gcr.io/distroless/cc as service
 
-COPY --from=busybox:stable-uclibc /bin/sh /bin/
+COPY --from=busybox:stable-uclibc /bin/* /bin/
 
-USER nonroot
+USER nonroot:nonroot
 WORKDIR /app
 
 # And create layers that depend on the scripts & migrations
 COPY ./docker/migrate_and_run.sh migrate_and_run.sh
 COPY migrations migrations
 
-COPY --from=builder --chown=nonroot:nonroot /build/data /data
 VOLUME ["/data"]
 
 # Then create layers that depends on the build output
