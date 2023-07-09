@@ -22,6 +22,7 @@ Example command to run the image:
 docker run \
   -e RUGS_USER_AUTH=ugs:super_secret_password \
   -e RUGS_CI_AUTH=ci:even_super_secreter_password \
+  -p 3000:3000
   -v ./data:/data -u $(id -u) \
   ghcr.io/jorgenpt/rugs:latest
 ```
@@ -32,7 +33,8 @@ RUGS expects `/data` to be **persistent between sessions** and writeable by the
 app user (either by passing `-u $(id -u)` to launch the container with the same
 uid as your current user, **or** by making sure the directory you mount is
 writable by uid `65532`). Use `-v ./my/data/path:/data` to mount a persistent
-directory inside the container.
+directory inside the container. You can change the HTTP port by using
+`-p <desired port>:3000` instead of `-p 3000:3000`.
 
 RUGS will automatically create and migrate the database on startup, so when you
 upgrade, there should not be any other steps needed.
@@ -115,7 +117,7 @@ network (in which case you can also leave `RUGS_USER_AUTH` empty).
 - `RUGS_PORT`: The HTTP port we listen on. Defaults to 3000. Rarely used with
   docker, as you can just use `-p <desired port>:3000`
 
-### Submitting badges 
+### Submitting badges
 
 If you want more control over submitting badges from CI, you can make a `POST`
 request to `/builds`. You need to use HTTP Basic Auth with the `RUGS_CI_AUTH`
