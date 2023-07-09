@@ -27,7 +27,7 @@ COPY ./.sqlx ./.sqlx
 COPY ./src ./src
 RUN cargo build --bins --release
 
-# Create the volume mount directory
+# Create the data directory so we have somewhere to write transient data if there's no mount
 RUN mkdir -p data
 
 FROM gcr.io/distroless/cc as service
@@ -41,9 +41,8 @@ WORKDIR /app
 COPY ./docker/migrate_and_run.sh migrate_and_run.sh
 COPY migrations migrations
 
-VOLUME ["/data"]
-
 # Then create layers that depends on the build output
+COPY --from=builder --chown=nonroot:nonroot /build/data /data
 COPY --from=builder /usr/local/cargo/bin/sqlx sqlx
 COPY --from=builder /build/current_target/release/rugs_metadata_server rugs_metadata_server
 
