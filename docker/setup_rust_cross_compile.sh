@@ -13,8 +13,8 @@ case "$target_os" in
                 rust_target="x86_64-unknown-linux-gnu"
                 ;;
             arm64)
-                rust_target="armv7-unknown-linux-gnueabihf"
-                rust_cross_linker="arm-linux-gnueabihf-gcc"
+                rust_target="aarch64-unknown-linux-gnu"
+                rust_cross_linker="aarch64-linux-gnu-gcc"
                 ;;
             *)
                 echo "Unsupported architecture $target_arch for $target_os" >&2
@@ -71,7 +71,7 @@ rustup target add "$rust_target"
 
 if [[ "$target_arch" == "arm64" ]]; then
     apt-get update
-    apt-get -y install libc6-armhf-cross libc6-dev-armhf-cross gcc-arm-linux-gnueabihf
+    apt-get -y install gcc-aarch64-linux-gnu
 else
     echo "Unsupported architecture $target_arch" >&2
     exit 1
