@@ -50,9 +50,5 @@ VOLUME ["/data"]
 COPY --from=builder /usr/local/cargo/bin/sqlx sqlx
 COPY --from=builder /build/target/current_target/release/rugs_metadata_server rugs_metadata_server
 
-ARG GIT_COMMIT
-ARG DOCKER_TAG
 ENV RUST_LOG=info
-ENV GIT_COMMIT=${GIT_COMMIT}
-ENV DOCKER_TAG=${DOCKER_TAG}
 ENTRYPOINT ["/app/migrate_and_run.sh", "/data/metadata.db"]
