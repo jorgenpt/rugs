@@ -34,7 +34,7 @@ RUN mkdir -p data
 
 FROM gcr.io/distroless/cc as service
 
-COPY --from=busybox:stable-uclibc /bin/sh /bin/id /bin/ls /bin/
+COPY --from=busybox:stable-uclibc /bin/sh /bin/
 
 USER nonroot
 WORKDIR /app
