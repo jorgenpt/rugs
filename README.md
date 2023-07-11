@@ -46,6 +46,10 @@ in the current directory:
 docker run --rm --user $(id -u):$(id -g) --volumes-from rugs --mount "type=bind,src=$(pwd),dst=/backup" debian:stable-slim tar cvf /backup/backup.tar /data
 ```
 
+You can also look at [examples/docker-compose.yml](/examples/docker-compose.yml)
+for a complete setup that supports HTTPS by automatically requesting a
+certificate from Let's Encrypt.
+
 ## Setup locally
 
 1. Run `./apply_migrations.sh` to initialize the database (it will be written to
@@ -105,10 +109,16 @@ service is running. It'll return an empty 200 status.
 RUGS does not (currently) support an SSL certificate. You should run it on a
 machine which is not accessible directly from the internet, and configure an
 endpoint in front of it which handles HTTPS -- e.g. an AWS ALB or your own nginx
-instance. **THIS IS IMPORTANT**, because the authentication is just HTTP Basic
+instance.
+
+**THIS IS IMPORTANT**, because the authentication is just HTTP Basic
 Auth, and so it'll be sent in plaintext over the wire if you're not using HTTPS.
 If you're not using HTTPS, make sure RUGS is only accessible from a local
 network (in which case you can also leave `RUGS_USER_AUTH` empty).
+
+You can also look at [examples/docker-compose.yml](/examples/docker-compose.yml)
+for a complete setup that supports HTTPS by automatically requesting a
+certificate from Let's Encrypt.
 
 ### Environment variables
 

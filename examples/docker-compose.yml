@@ -1,0 +1,70 @@
+### Example RUGS configuration with HTTPS using docker-compose
+# This should run RUGS with HTTPS out of the box, using Let's Encrypt
+# certificates.
+#
+# To get this working, you need to:
+# 1. Update DEFAULT_EMAIL to a real email address that will be sent to let's
+#    encrypt to give you status updates on your SSL certificate
+# 2. Set up a DNS name and point it to this machine
+# 3. Update VIRTUAL_HOST and LETSENCRYPT_HOST to point to the DNS name you
+#    configured above
+# 4. Update RUGS_USER_AUTH and RUGS_CI_AUTH to have actually secure password
+# 5. `docker-compose up -d`
+#
+# You should now be able to access RUGS via https://rugs.example.com with a
+# valid certificate and default port.
+
+version: "3.8"
+
+services:
+  # Root vhost proxy
+  nginx-proxy:
+    container_name: nginx-proxy
+    restart: always
+    image: nginxproxy/nginx-proxy:latest
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - "./nginx-proxy/certs:/etc/nginx/certs"
+      - "./nginx-proxy/vhost:/etc/nginx/vhost.d"
+      - "./nginx-proxy/html:/usr/share/nginx/html"
+    networks:
+      - nginx-proxy
+
+  # letsencrypt renewal service
+  acme-companion:
+    restart: always
+    image: nginxproxy/acme-companion:latest
+    volumes_from:
+      - nginx-proxy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - "./acme-companion/etc:/etc/acme.sh"
+    environment:
+      DEFAULT_EMAIL: me@example.com
+
+  # RUGS service
+  rugs:
+    restart: always
+    image: ghcr.io/jorgenpt/rugs:latest
+    volumes:
+      - type: volume
+        source: rugs_data
+        target: /data
+    expose:
+      - 3000
+    environment:
+      VIRTUAL_HOST: rugs.example.com
+      LETSENCRYPT_HOST: rugs.example.com
+      RUGS_USER_AUTH: "user:personal_secret"
+      RUGS_CI_AUTH: "ci:more_secreter_secret"
+    networks:
+      - nginx-proxy
+
+networks:
+  nginx-proxy:
+    driver: bridge
+volumes:
+  rugs_data:
