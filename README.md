@@ -93,7 +93,6 @@ To submit badges, you can do one of the following:
   to post badges to `https://ci_auth_user:ci_auth_password@my.rugs.local`, or
 - Make a direct request to the API -- see [submitting badges](#submitting-badges).
 
-
 ## Additional setup information
 
 ### APIs
@@ -141,17 +140,18 @@ request to `/builds`. You need to use HTTP Basic Auth with the `RUGS_CI_AUTH`
 ```
 
 These fields are:
- - `Project`: The Perforce depot path to the project directory, i.e. the
-   directory where the `.uproject` file lives (so `//myproject/main/MyProject`,
-   not `//myproject/main` or `//myproject/main/MyProject/MyProject.uproject`)
- - `ChangeNumber`: The Perforce changelist number that the badge is associated
-   with
- - `BuildType`: Arbitrary identifier used to update the status of the same badge
-   (a new request with the same `BuildType` and `ChangeNumber` will overwrite an
-   old badge)
- - `Result`: The status color shown in UGS, which can be one of `Starting`,
-   `Failure`, `Warning`, `Success`, or `Skipped`
- - `Url`: The address that will be opened when the badge is clicked in UGS
+
+- `Project`: The Perforce depot path to the project directory, i.e. the
+  directory where the `.uproject` file lives (so `//myproject/main/MyProject`,
+  not `//myproject/main` or `//myproject/main/MyProject/MyProject.uproject`)
+- `ChangeNumber`: The Perforce changelist number that the badge is associated
+  with
+- `BuildType`: Arbitrary identifier used to update the status of the same badge
+  (a new request with the same `BuildType` and `ChangeNumber` will overwrite an
+  old badge)
+- `Result`: The status color shown in UGS, which can be one of `Starting`,
+  `Failure`, `Warning`, `Success`, or `Skipped`
+- `Url`: The address that will be opened when the badge is clicked in UGS
 
 ## License
 
