@@ -32,7 +32,7 @@ RUN mkdir -p data
 
 FROM gcr.io/distroless/cc as service
 
-COPY --from=busybox:stable-uclibc /bin/* /bin/
+COPY --from=busybox:stable-uclibc /bin/sh /bin/
 
 USER nonroot:nonroot
 WORKDIR /app
