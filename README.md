@@ -3,16 +3,25 @@
 [![Latest Docker image][badge-latest]][container-registry]
 [![Docker image size][badge-size]][container-registry]
 
-RUGS is an efficient, easy-to-deploy alternative to the Unreal Game Sync
-metadata server that lets you use basic authentication if desired. It uses a
-simple sqlite database.
+RUGS is an efficient, easy-to-deploy alternative to Epic's official metadata
+server for [Unreal Game Sync][ugs]. It is designed to work seamlessly with
+Unreal Game Sync, and adds support for basic authentication if desired. It uses
+a simple sqlite database to have as little setup as possible.
 
 The basic authentication is intended to allow you to run it publicly accessible
-on the internet with a modicum of security.
+on the internet with a modicum of security, and requires a [small
+patch][ugs-pull] applied to Unreal Game Sync before it's available.
+
+Features that a RUGS server will enable in Unreal Game Sync:
+ - Surfacing build results and providing desktop notifications for build
+   breakages
+ - Allowing users to mark changes as good and bad, and indicate to other team
+   members that they're investigating a problem with the build
+ - Showing which users are synced to which changes
 
 ## Setup with Docker (recommended)
 
-Docker images are available for arm64 and amd64, and are hosted on [GitHub
+Docker images are available for arm64 and amd64, and are [hosted on the GitHub
 Container Registry][container-registry]. The `latest` tag is used for official
 releases, or there is a `main` tag for bleeding edge builds.
 
@@ -38,13 +47,6 @@ port>:3000` instead of `-p 3000:3000`.
 
 RUGS will automatically create and migrate the database on startup, so when you
 upgrade, there should not be any other steps needed.
-
-To back this data up you can use the following command to create a `backup.tar`
-in the current directory:
-
-```sh
-docker run --rm --user $(id -u):$(id -g) --volumes-from rugs --mount "type=bind,src=$(pwd),dst=/backup" debian:stable-slim tar cvf /backup/backup.tar /data
-```
 
 You can also look at [examples/docker-compose.yml](/examples/docker-compose.yml)
 for a complete setup that supports HTTPS by automatically requesting a
@@ -163,6 +165,23 @@ These fields are:
   `Failure`, `Warning`, `Success`, or `Skipped`
 - `Url`: The address that will be opened when the badge is clicked in UGS
 
+
+### Docker volume backup
+
+To back the data from your Docker volume up, you can use the following command
+to create a `backup.tar` in the current directory:
+
+```sh
+docker run --rm \
+  --user $(id -u):$(id -g) \
+  --volumes-from rugs \
+  --mount "type=bind,src=$(pwd),dst=/backup" \
+  debian:stable-slim \
+  tar cvf /backup/backup.tar /data
+```
+
+This assumes that the container name is `rugs` on your Docker container.
+
 ## License
 
 This work is dual-licensed under Apache 2.0 and MIT.
@@ -170,6 +189,7 @@ You can choose between one of them if you use this work.
 
 `SPDX-License-Identifier: MIT OR Apache-2.0`
 
+[ugs]: https://docs.unrealengine.com/5.2/en-US/unreal-game-sync-ugs-for-unreal-engine/
 [ugs-pull]: https://github.com/EpicGames/UnrealEngine/pull/9168
 [container-registry]: https://github.com/jorgenpt/rugs/pkgs/container/rugs
 [badge-latest]: https://ghcr-badge.egpl.dev/jorgenpt/rugs/latest_tag?trim=major&label=latest&ignore=latest,main,docker

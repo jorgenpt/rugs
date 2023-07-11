@@ -47,6 +47,7 @@ services:
 
   # RUGS service
   rugs:
+    container_name: rugs
     restart: always
     image: ghcr.io/jorgenpt/rugs:latest
     volumes:
