@@ -1,6 +1,6 @@
 [package]
 name = "rugs"
-version = "0.4.2-PRE"
+version = "0.4.2"
 authors = ["Jørgen P. Tjernø <jorgen@tjer.no>"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
