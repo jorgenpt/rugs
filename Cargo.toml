@@ -19,8 +19,6 @@ num-traits = "0.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_repr = "0.1.8"
-signal-hook = "0.3.15"
-signal-hook-tokio = { version = "0.3.1", features = ["futures-v0_3"] }
 sqlx = { version = "0.7", features = ["chrono", "runtime-tokio", "sqlite"] }
 tokio = { version = "1.0", features = ["full"] }
 tower = { version = "0.4.13" }

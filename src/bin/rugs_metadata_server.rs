@@ -8,15 +8,12 @@ use axum::{
 };
 use base64::prelude::*;
 use clap::Parser;
-use signal_hook::consts::signal::*;
-use signal_hook_tokio::Signals;
 use sqlx::SqlitePool;
-use tokio::sync::{oneshot::Sender, RwLock};
+use tokio::sync::RwLock;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use tracing::{error, info};
 
-use futures::stream::StreamExt;
 use std::{net::SocketAddr, sync::Arc};
 
 use rugs::handlers::*;
@@ -102,26 +99,15 @@ async fn auth<B>(req: Request<B>, next: Next<B>, required_auth: String) -> impl 
 /// Just returns a 200.
 pub async fn health() {}
 
-async fn handle_signals(mut signals: Signals, exit_tx: Sender<()>) {
-    while let Some(signal) = signals.next().await {
-        match signal {
-            SIGTERM | SIGINT | SIGQUIT => {
-                info!("Exiting because of signal...");
-                let _ = exit_tx.send(());
-                break;
-            }
-            _ => unreachable!(),
-        }
-    }
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     let (exit_tx, exit_rx) = tokio::sync::oneshot::channel::<()>();
 
-    let signals = Signals::new(&[SIGTERM, SIGINT, SIGQUIT])?;
-    let handle = signals.handle();
-    let signals_task = tokio::spawn(handle_signals(signals, exit_tx));
+    let _signals_task = tokio::spawn(async {
+        if let Ok(_) = tokio::signal::ctrl_c().await {
+            let _ = exit_tx.send(());
+        }
+    });
 
     tracing_subscriber::fmt::init();
 
@@ -141,8 +127,6 @@ async fn main() -> Result<()> {
         })
         .await?;
 
-    handle.close();
-    signals_task.await?;
     Ok(())
 }
 
