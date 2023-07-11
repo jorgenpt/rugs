@@ -43,7 +43,7 @@ To back this data up you can use the following command to create a `backup.tar`
 in the current directory:
 
 ```sh
-docker run --rm --volumes-from rugs --mount "type=bind,src=$(pwd),dst=/backup" ubuntu tar cvf /backup/backup.tar /data
+docker run --rm --user $(id -u):$(id -g) --volumes-from rugs --mount "type=bind,src=$(pwd),dst=/backup" debian:stable-slim tar cvf /backup/backup.tar /data
 ```
 
 ## Setup locally
