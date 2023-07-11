@@ -46,5 +46,6 @@ COPY --from=builder --chown=nonroot:nonroot /build/data /data
 COPY --from=builder /usr/local/cargo/bin/sqlx sqlx
 COPY --from=builder /build/current_target/release/rugs_metadata_server rugs_metadata_server
 
+LABEL org.opencontainers.image.description="An efficient, easy-to-deploy alternative to Epic's official metadata server for Unreal Game Sync."
 ENV RUST_LOG=info
 ENTRYPOINT ["/app/migrate_and_run.sh", "/data/metadata.db"]
