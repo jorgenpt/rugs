@@ -1,6 +1,6 @@
 [package]
 name = "rugs"
-version = "0.4.3-PRE"
+version = "0.4.3"
 authors = ["Jørgen P. Tjernø <jorgen@tjer.no>"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
@@ -9,7 +9,11 @@ license = "MIT OR Apache-2.0"
 anyhow = "1.0"
 axum = "0.6.18"
 base64 = "0.21.2"
-chrono = { version = "0.4.19", default-features = false, features = ["serde", "clock", "std"] }
+chrono = { version = "0.4.19", default-features = false, features = [
+    "serde",
+    "clock",
+    "std",
+] }
 clap = { version = "4.3.2", features = ["derive"] }
 futures = "0.3.28"
 hyper = "0.14.18"
