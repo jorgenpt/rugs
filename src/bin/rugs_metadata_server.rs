@@ -46,9 +46,15 @@ struct Config {
 impl Config {
     /// Construct a config from environment variables or sensible defaults
     fn from_env() -> Self {
-        let user_auth = std::env::var("RUGS_USER_AUTH").ok();
+        let user_auth = std::env::var("RUGS_USER_AUTH_FILE")
+            .ok()
+            .and_then(|path| std::fs::read_to_string(path).ok())
+            .or_else(|| std::env::var("RUGS_USER_AUTH").ok());
 
-        let ci_auth = std::env::var("RUGS_CI_AUTH").ok();
+        let ci_auth = std::env::var("RUGS_CI_AUTH_FILE")
+            .ok()
+            .and_then(|path| std::fs::read_to_string(path).ok())
+            .or_else(|| std::env::var("RUGS_CI_AUTH").ok());
 
         let http_port = std::env::var("RUGS_PORT")
             .ok()
@@ -197,6 +203,9 @@ mod tests {
     const CI_AUTH: &str = "ci:ci";
     const USER_AUTH: &str = "user:user";
 
+    const USER_AUTH_FILE_KEY: &str = "RUGS_USER_AUTH_FILE";
+    const CI_AUTH_FILE_KEY: &str = "RUGS_CI_AUTH_FILE";
+
     fn config() -> Config {
         Config {
             user_auth: USER_AUTH.to_string(),
@@ -214,6 +223,44 @@ mod tests {
         sqlx::migrate!("./migrations").run(&pool).await?;
 
         Ok(pool)
+    }
+
+    /// Test reading auth config secrets from files
+    #[tokio::test]
+    async fn config_secrets() -> Result<()> {
+        std::fs::write("./rugs_user_auth", USER_AUTH).expect("Could not write user secret to file");
+        std::fs::write("./rugs_ci_auth", CI_AUTH).expect("Could not write CI secret to file");
+
+        let cur_user_auth_file = std::env::var(USER_AUTH_FILE_KEY);
+        let cur_ci_auth_file = std::env::var(CI_AUTH_FILE_KEY);
+
+        std::env::set_var(USER_AUTH_FILE_KEY, "./rugs_user_auth");
+        std::env::set_var(CI_AUTH_FILE_KEY, "./rugs_ci_auth");
+
+        let config = Config::from_env();
+
+        std::fs::remove_file("./rugs_user_auth").expect("Could not delete user secret file");
+        std::fs::remove_file("./rugs_ci_auth").expect("Could not delete CI secret file");
+
+        if let Ok(prev_user_auth_file) = cur_user_auth_file {
+            std::env::set_var(USER_AUTH_FILE_KEY, prev_user_auth_file);
+        } else {
+            std::env::remove_var(USER_AUTH_FILE_KEY);
+        }
+
+        if let Ok(prev_ci_auth_file) = cur_ci_auth_file {
+            std::env::set_var(CI_AUTH_FILE_KEY, prev_ci_auth_file);
+        } else {
+            std::env::remove_var(CI_AUTH_FILE_KEY);
+        }
+
+        assert_eq!(config.user_auth, USER_AUTH);
+        assert_eq!(config.ci_auth, CI_AUTH);
+
+        assert_ne!(config.user_auth, "");
+        assert_ne!(config.ci_auth, "");
+
+        Ok(())
     }
 
     /// Test the basic /health API
