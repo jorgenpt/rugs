@@ -49,11 +49,13 @@ impl Config {
         let user_auth = std::env::var("RUGS_USER_AUTH_FILE")
             .ok()
             .and_then(|path| std::fs::read_to_string(path).ok())
+            .map(|value| value.trim_end().to_string())
             .or_else(|| std::env::var("RUGS_USER_AUTH").ok());
 
         let ci_auth = std::env::var("RUGS_CI_AUTH_FILE")
             .ok()
             .and_then(|path| std::fs::read_to_string(path).ok())
+            .map(|value| value.trim_end().to_string())
             .or_else(|| std::env::var("RUGS_CI_AUTH").ok());
 
         let http_port = std::env::var("RUGS_PORT")
@@ -198,11 +200,14 @@ mod tests {
         http::{Request, StatusCode},
     };
     use rugs::models::{CreateBadge, GetMetadataListResponseV2};
+    use std::io::Write;
     use tower::{Service, ServiceExt};
 
     const CI_AUTH: &str = "ci:ci";
     const USER_AUTH: &str = "user:user";
 
+    const USER_AUTH_KEY: &str = "RUGS_USER_AUTH";
+    const CI_AUTH_KEY: &str = "RUGS_CI_AUTH";
     const USER_AUTH_FILE_KEY: &str = "RUGS_USER_AUTH_FILE";
     const CI_AUTH_FILE_KEY: &str = "RUGS_CI_AUTH_FILE";
 
@@ -225,40 +230,62 @@ mod tests {
         Ok(pool)
     }
 
-    /// Test reading auth config secrets from files
-    #[tokio::test]
-    async fn config_secrets() -> Result<()> {
-        std::fs::write("./rugs_user_auth", USER_AUTH).expect("Could not write user secret to file");
-        std::fs::write("./rugs_ci_auth", CI_AUTH).expect("Could not write CI secret to file");
+    fn config_secrets_files_internal() {
+        let mut user_auth_tempfile: tempfile::NamedTempFile =
+            tempfile::NamedTempFile::new().expect("Could not create user_auth_tempfile");
+        write!(user_auth_tempfile, "{}", USER_AUTH).unwrap();
 
-        let cur_user_auth_file = std::env::var(USER_AUTH_FILE_KEY);
-        let cur_ci_auth_file = std::env::var(CI_AUTH_FILE_KEY);
+        let mut ci_auth_tempfile: tempfile::NamedTempFile =
+            tempfile::NamedTempFile::new().expect("Could not create ci_auth_tempfile");
+        write!(ci_auth_tempfile, "{}", CI_AUTH).unwrap();
 
-        std::env::set_var(USER_AUTH_FILE_KEY, "./rugs_user_auth");
-        std::env::set_var(CI_AUTH_FILE_KEY, "./rugs_ci_auth");
+        std::env::set_var(USER_AUTH_FILE_KEY, user_auth_tempfile.path().as_os_str());
+        std::env::set_var(CI_AUTH_FILE_KEY, ci_auth_tempfile.path().as_os_str());
 
         let config = Config::from_env();
 
-        std::fs::remove_file("./rugs_user_auth").expect("Could not delete user secret file");
-        std::fs::remove_file("./rugs_ci_auth").expect("Could not delete CI secret file");
+        std::env::remove_var(USER_AUTH_FILE_KEY);
+        std::env::remove_var(CI_AUTH_FILE_KEY);
 
-        if let Ok(prev_user_auth_file) = cur_user_auth_file {
-            std::env::set_var(USER_AUTH_FILE_KEY, prev_user_auth_file);
-        } else {
-            std::env::remove_var(USER_AUTH_FILE_KEY);
-        }
+        assert_eq!(config.user_auth, USER_AUTH);
+        assert_eq!(config.ci_auth, CI_AUTH);
+    }
 
-        if let Ok(prev_ci_auth_file) = cur_ci_auth_file {
-            std::env::set_var(CI_AUTH_FILE_KEY, prev_ci_auth_file);
-        } else {
-            std::env::remove_var(CI_AUTH_FILE_KEY);
-        }
+    /// Test reading auth config secrets from files
+    #[tokio::test]
+    async fn config_secrets_files() -> Result<()> {
+        config_secrets_files_internal();
+
+        Ok(())
+    }
+
+    /// Test reading auth config secrets from envvars
+    #[tokio::test]
+    async fn config_secrets_envvars() -> Result<()> {
+        std::env::set_var(USER_AUTH_KEY, USER_AUTH);
+        std::env::set_var(CI_AUTH_KEY, CI_AUTH);
+
+        let config = Config::from_env();
+
+        std::env::remove_var(USER_AUTH_KEY);
+        std::env::remove_var(CI_AUTH_KEY);
 
         assert_eq!(config.user_auth, USER_AUTH);
         assert_eq!(config.ci_auth, CI_AUTH);
 
-        assert_ne!(config.user_auth, "");
-        assert_ne!(config.ci_auth, "");
+        Ok(())
+    }
+
+    /// Test behaviour when both RUGS_USER_AUTH/RUGS_CI_AUTH and RUGS_USER_AUTH_FILE/RUGS_CI_AUTH_FILE are set (expects _FILE to have priority)
+    #[tokio::test]
+    async fn config_secrets_files_envvars() -> Result<()> {
+        std::env::set_var(USER_AUTH_KEY, "invalid:user");
+        std::env::set_var(CI_AUTH_KEY, "invalid:ci");
+
+        config_secrets_files_internal();
+
+        std::env::remove_var(USER_AUTH_KEY);
+        std::env::remove_var(CI_AUTH_KEY);
 
         Ok(())
     }
