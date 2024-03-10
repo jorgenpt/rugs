@@ -1,6 +1,6 @@
 # Build our rust application using rust's cross-compilation on our current host platform
 # Rust cross-compilation is much faster than emulating a Docker container
-FROM --platform=$BUILDPLATFORM rust:1.70 as builder
+FROM --platform=$BUILDPLATFORM rust:1.76 as builder
 
 ARG BUILDPLATFORM
 ARG TARGETPLATFORM
