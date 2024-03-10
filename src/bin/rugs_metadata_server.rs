@@ -112,7 +112,7 @@ async fn main() -> Result<()> {
     let (exit_tx, exit_rx) = tokio::sync::oneshot::channel::<()>();
 
     let _signals_task = tokio::spawn(async {
-        if let Ok(_) = tokio::signal::ctrl_c().await {
+        if tokio::signal::ctrl_c().await.is_ok() {
             let _ = exit_tx.send(());
         }
     });

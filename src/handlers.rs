@@ -436,7 +436,7 @@ pub async fn metadata_submit(
     let existing_event_query_string =
         "SELECT * FROM user_events WHERE project_id = ? AND user_name = ? AND change_number = ?";
     let existing_event_query =
-        sqlx::query_as::<sqlx::Sqlite, UserEvent>(&existing_event_query_string)
+        sqlx::query_as::<sqlx::Sqlite, UserEvent>(existing_event_query_string)
             .bind(project_id)
             .bind(&params.user_name)
             .bind(params.change);
