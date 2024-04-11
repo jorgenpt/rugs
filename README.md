@@ -138,7 +138,7 @@ certificate from Let's Encrypt.
 ### Submitting badges
 
 If you want more control over submitting badges from CI, you can make a `POST`
-request to `/builds`. You need to use HTTP Basic Auth with the `RUGS_CI_AUTH`
+request to `/api/build`. You need to use HTTP Basic Auth with the `RUGS_CI_AUTH`
 (if any), and provide a JSON body like:
 
 ```json
