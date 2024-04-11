@@ -13,11 +13,12 @@ on the internet with a modicum of security, and requires a [small
 patch][ugs-pull] applied to Unreal Game Sync before it's available.
 
 Features that a RUGS server will enable in Unreal Game Sync:
- - Surfacing build results and providing desktop notifications for build
-   breakages
- - Allowing users to mark changes as good and bad, and indicate to other team
-   members that they're investigating a problem with the build
- - Showing which users are synced to which changes
+
+- Surfacing build results and providing desktop notifications for build
+  breakages
+- Allowing users to mark changes as good and bad, and indicate to other team
+  members that they're investigating a problem with the build
+- Showing which users are synced to which changes
 
 ## Setup with Docker (recommended)
 
@@ -164,7 +165,6 @@ These fields are:
 - `Result`: The status color shown in UGS, which can be one of `Starting`,
   `Failure`, `Warning`, `Success`, or `Skipped`
 - `Url`: The address that will be opened when the badge is clicked in UGS
-
 
 ### Docker volume backup
 
