@@ -173,12 +173,23 @@ to create a `backup.tar` in the current directory:
 
 ```sh
 docker run --rm \
-  --user $(id -u):$(id -g) \
   --volumes-from rugs \
   --mount "type=bind,src=$(pwd),dst=/backup" \
   debian:stable-slim \
-  tar cvf /backup/backup.tar /data
+  tar cvf "/backup/rugs-backup.$(date +"%Y%m%d.%H%M%S").tar" /data
 ```
+
+From within that same directory, you can restore the data with the following command:
+
+```sh
+docker run --rm \
+  --volumes-from rugs \
+  --mount "type=bind,src=$(pwd),dst=/backup" \
+  debian:stable-slim \
+  tar -xvf /backup/rugs-backup.<timestamp>.tar -C /data
+```
+
+Where `<timestamp>` is the timestamp of the backup you want to restore.
 
 This assumes that the container name is `rugs` on your Docker container.
 
