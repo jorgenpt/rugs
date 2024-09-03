@@ -8,6 +8,7 @@ use axum::{
 };
 use base64::prelude::*;
 use clap::Parser;
+use futures::pin_mut;
 use sqlx::SqlitePool;
 use tokio::sync::RwLock;
 use tower::ServiceBuilder;
@@ -19,6 +20,9 @@ use std::{net::SocketAddr, sync::Arc};
 use rugs::handlers::*;
 #[cfg(debug_assertions)]
 use rugs::middleware::print_request_response;
+
+// Run `PRAGMA optimize` every 12 hours (https://www.sqlite.org/pragma.html#pragma_optimize)
+const OPTIMIZE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60 * 60 * 12);
 
 /// A simple authenticated metadata server for UGS
 #[derive(Parser, Debug)]
@@ -126,14 +130,35 @@ async fn main() -> Result<()> {
         .await
         .with_context(|| format!("Could not open database at {}", args.database))?;
 
+    let optimize_pool = pool.clone();
+    // Per the sqlite docs, this is recommended to be run on startup (https://www.sqlite.org/pragma.html#pragma_optimize)
+    sqlx::query("PRAGMA optimize=0x10002")
+        .execute(&optimize_pool)
+        .await?;
+
     let addr = SocketAddr::from(([0, 0, 0, 0], config.http_port));
     info!("listening on {}", addr);
-    axum::Server::bind(&addr)
+
+    let server_future = axum::Server::bind(&addr)
         .serve(app(config, pool).into_make_service())
         .with_graceful_shutdown(async {
             exit_rx.await.ok();
-        })
-        .await?;
+        });
+
+    pin_mut!(server_future);
+    loop {
+        let delay_result = tokio::time::timeout(OPTIMIZE_INTERVAL, &mut server_future).await;
+        match delay_result {
+            Err(_) => {
+                info!("running regular `PRAGMA optimize`");
+                // Per the sqlite docs, this is recommended to be run regularly for long-running apps (https://www.sqlite.org/pragma.html#pragma_optimize)
+                sqlx::query("PRAGMA optimize")
+                    .execute(&optimize_pool)
+                    .await?;
+            }
+            Ok(server_result) => break server_result?,
+        }
+    }
 
     Ok(())
 }
