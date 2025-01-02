@@ -15,7 +15,7 @@ COPY ./docker/cross_build_setup/${BUILDPLATFORM}/${TARGETPLATFORM}.sh cross_buil
 RUN ./cross_build_setup.sh
 
 # Create a layer with just the sqlx-cli
-RUN cargo install --no-default-features --features sqlite sqlx-cli@^0.7
+RUN cargo install --no-default-features --features sqlite sqlx-cli@^0.8
 
 # Then create a layer that is only invalidated if the dependencies change
 COPY ./Cargo.toml ./Cargo.lock ./
