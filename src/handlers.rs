@@ -21,6 +21,14 @@ pub struct Metrics {
     pub metadata_submit_requests: AtomicU64,
 }
 
+fn find_last_starting_at(haystack: &str, needle: char, starting_index: usize) -> Option<usize> {
+    if let Some(slice) = haystack.get(starting_index..) {
+        slice.rfind(needle).map(|i| i + starting_index)
+    } else {
+        None
+    }
+}
+
 fn find_starting_at(haystack: &str, needle: char, starting_index: usize) -> Option<usize> {
     if let Some(slice) = haystack.get(starting_index..) {
         slice.find(needle).map(|i| i + starting_index)
@@ -36,7 +44,7 @@ fn split_project_path(project_path: &str) -> Option<(String, String)> {
     }
 
     if let Some(stream_name_index) = find_starting_at(project_path, '/', 2) {
-        if let Some(project_index) = find_starting_at(project_path, '/', stream_name_index + 1) {
+        if let Some(project_index) = find_last_starting_at(project_path, '/', stream_name_index + 1) {
             if project_path.len() > project_index + 1 {
                 Some((
                     normalize_stream(&project_path[0..project_index]),
@@ -483,4 +491,28 @@ pub async fn metadata_submit(
     }
 
     Ok((StatusCode::OK, ""))
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn test_split_project_path() {
+        const STREAM_DEPTH_DEFAULT: &str = "//depot/stream/project-name";
+        const STREAM_DEPTH_3: &str = "//depot/stream/depth3/project-name-3";
+        const STREAM_DEPTH_4: &str = "//depot/stream/depth3/depth4/project-name-4";
+
+        fn assert_split_project_path(
+            project_path: &str,
+            expected_stream: &str,
+            expected_project: &str,
+        ) {
+            let (stream, project) = super::split_project_path(project_path).unwrap();
+            assert_eq!(stream, expected_stream);
+            assert_eq!(project, expected_project);
+        }
+
+        assert_split_project_path(STREAM_DEPTH_DEFAULT, "//depot/stream", "project-name");
+        assert_split_project_path(STREAM_DEPTH_3, "//depot/stream/depth3", "project-name-3");
+        assert_split_project_path(STREAM_DEPTH_4, "//depot/stream/depth3/depth4", "project-name-4");
+    }
 }
